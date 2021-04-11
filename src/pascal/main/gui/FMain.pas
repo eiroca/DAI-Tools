@@ -87,7 +87,7 @@ const
   INPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'png');
   INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump, nil);
   OUTPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'png');
-  OUTPUT_CALLS: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, nil, @DAI_savePNG);
+  OUTPUT_CALLS: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_savePNG);
 
   FONT_PATHNAME: array of string = ('DAI\ROMS\nch.bin', 'DAI\nch.bin', 'nch.bin');
 
@@ -220,8 +220,9 @@ var
   p: string;
 begin
   basePath := ExtractFilePath(Application.ExeName);
+  tvWorking.Root := '';
+  tvWorking.Path:=basePath + 'DAI\working';;
   tvDAI.Root := basePath + 'DAI\archive';
-  tvWorking.Root := basePath + 'DAI\working';
   for p in FONT_PATHNAME do begin
     if (FileExists(basePath + p) and DAI_initFont(basePath + p)) then begin
       SetStatus('Font loaded ' + p);

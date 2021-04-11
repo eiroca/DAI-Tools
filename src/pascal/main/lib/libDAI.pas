@@ -86,6 +86,7 @@ function DAI_loadDump(const inPath: string; var seg: TSegment): boolean;
 function DAI_saveBin(const outPath: string; var seg: TSegment): boolean;
 function DAI_saveSBin(const outPath: string; var seg: TSegment): boolean;
 function DAI_savePNG(const outPath: string; var seg: TSegment): boolean;
+function DAI_saveDump(const outPath: string; var seg: TSegment): boolean;
 
 implementation
 
@@ -259,6 +260,55 @@ begin
   end;
 end;
 
+function DAI_saveDump(const outPath: string; var seg: TSegment): boolean;
+var
+  Lines: TStringList;
+  endAddr: integer;
+  i, sAdr, len, cPos: integer;
+  s: string;
+begin
+  if (seg.len = 0) then begin
+    Result := False;
+    lastError := 'Invalid segment';
+    exit;
+  end;
+  Result := True;
+  endAddr := seg.addr + seg.len - 1;
+  try
+    Lines := TStringList.Create;
+    Lines.Add(Format('>D%4x %x', [seg.addr, endAddr]));
+    if (seg.entrypoint <> 0) then begin
+      Lines.Add(Format('>Run Address = %4x', [seg.entrypoint]));
+    end;
+    sAdr := seg.addr;
+    cPos := 0;
+    while (sAdr < endAddr) do begin
+      s := IntToHex(sAdr, 4);
+      len := $10 - (sAdr and $000F);
+      Inc(sAdr, len);
+      if (sAdr > endAddr) then begin
+        len := len - (sAdr - endAddr) + 1;
+      end;
+      for i := 0 to len - 1 do begin
+        s := s + ' ' + IntToHex(seg.Data[cPos], 2);
+        Inc(cPos);
+      end;
+      Lines.Add(s);
+    end;
+    try
+      Lines.SaveToFile(outPath);
+    except
+      on E: Exception do begin
+        Result := False;
+        lastError := 'Expception: ' + E.Message;
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+
 function DAI_saveBin(const outPath: string; var seg: TSegment): boolean;
 var
   fs: TFileStream;
@@ -331,6 +381,7 @@ begin
   lastError := 'Unable to read ' + outPath;
   fs := TFileStream.Create(outPath, fmOpenRead);
   try
+    sz := fs.Size - 2;
     seg.addr := fs.ReadWord;
   except
     on E: Exception do begin
@@ -339,7 +390,6 @@ begin
       exit;
     end;
   end;
-  sz := fs.Size;
   if not _loadSegData(fs, sz, seg) then begin
     exit;
   end;
@@ -393,16 +443,19 @@ end;
 
 procedure _drawBlockGraph4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
 var
-  j, k, l: integer;
+  j, k, s: integer;
   col: TColor;
   colIdx: integer;
+  baseX, baseY: integer;
 begin
   for j := 0 to yl - 1 do begin
+    baseY := curScanLine + j;
     for k := 0 to 7 do begin
+      baseX := (i * 8 + k) * xl;
       colIdx := (((data1 shr (7 - k)) and $01) shl 1) or ((data2 shr (7 - k)) and $01);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
-      for l := 0 to xl - 1 do begin
-        C.Pixels[(i * 8 + k) * xl + l, curScanLine + j] := col;
+      for s := 0 to xl - 1 do begin
+        C.Pixels[baseX + s, baseY] := col;
       end;
     end;
   end;
@@ -410,17 +463,20 @@ end;
 
 procedure _drawBlockText4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
 var
-  j, k, l: integer;
+  j, k, s: integer;
   col: TColor;
   charData, colIdx: integer;
+  baseX, baseY: integer;
 begin
   for j := 0 to yl - 1 do begin
+    baseY := curScanLine + j;
     charData := FONT[data1 * 16 + j];
     for k := 0 to 7 do begin
+      baseX := (i * 8 + k) * xl;
       colIdx := (((charData shr k) and $01) shl 1) or ((data2 shr (7 - k)) and $01);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
-      for l := 0 to xl - 1 do begin
-        C.Pixels[(i * 8 + k) * xl + l, curScanLine + j] := col;
+      for s := 0 to xl - 1 do begin
+        C.Pixels[baseX + s, baseY] := col;
       end;
     end;
   end;
@@ -484,12 +540,15 @@ end;
 
 procedure _drawBlockGraph16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
 var
-  j, k, l: integer;
+  j, k, s: integer;
   col: TColor;
   colIdx: integer;
+  baseX, baseY: integer;
 begin
   for j := 0 to yl - 1 do begin
+    baseY := curScanLine + j;
     for k := 0 to 7 do begin
+      baseX := (i * 8 + k) * xl;
       if ((data1 shr (7 - k)) and $01) <> 0 then begin
         colIdx := (data2 shr 4) and $0F;
       end
@@ -497,8 +556,8 @@ begin
         colIdx := data2 and $0F;
       end;
       col := DAI_PALETTE[colIdx];
-      for l := 0 to xl - 1 do begin
-        C.Pixels[(i * 8 + k) * xl + l, curScanLine + j] := col;
+      for s := 0 to xl - 1 do begin
+        C.Pixels[baseX + s, baseY] := col;
       end;
     end;
   end;
@@ -506,13 +565,16 @@ end;
 
 procedure _drawBlockText16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
 var
-  j, k, l: integer;
+  j, k, s: integer;
   col: TColor;
   charData, colIdx: integer;
+  baseX, baseY: integer;
 begin
   for j := 0 to yl - 1 do begin
+    baseY := curScanLine + j;
     charData := FONT[data1 * 16 + j];
     for k := 0 to 7 do begin
+      baseX := (i * 8 + k) * xl;
       if ((charData shr k) and $01) <> 0 then begin
         colIdx := (data2 shr 4) and $0F;
       end
@@ -520,8 +582,8 @@ begin
         colIdx := data2 and $0F;
       end;
       col := DAI_PALETTE[colIdx];
-      for l := 0 to xl - 1 do begin
-        C.Pixels[(i * 8 + k) * xl + l, curScanLine + j] := col;
+      for s := 0 to xl - 1 do begin
+        C.Pixels[baseX + s, baseY] := col;
       end;
     end;
   end;
@@ -696,4 +758,3 @@ initialization
   DAI_COLORREG[2] := 0;
   DAI_COLORREG[3] := 0;
 end.
-
