@@ -1,0 +1,224 @@
+object fmMain: TfmMain
+  Left = 431
+  Height = 644
+  Top = 110
+  Width = 765
+  Caption = 'DAI Tools'
+  ClientHeight = 624
+  ClientWidth = 765
+  Menu = MainMenu1
+  OnActivate = FormActivate
+  OnCreate = FormCreate
+  LCLVersion = '2.0.12.0'
+  object sbStatus: TStatusBar
+    Left = 0
+    Height = 23
+    Top = 601
+    Width = 765
+    Panels = <>
+  end
+  object Panel1: TPanel
+    Left = 0
+    Height = 88
+    Top = 513
+    Width = 765
+    Align = alBottom
+    ClientHeight = 88
+    ClientWidth = 765
+    ParentColor = False
+    TabOrder = 1
+    object iInputFile: TFileNameEdit
+      Left = 64
+      Height = 23
+      Top = 16
+      Width = 488
+      FileName = 'iInputFile'
+      FilterIndex = 0
+      HideDirectories = False
+      ButtonWidth = 23
+      NumGlyphs = 1
+      MaxLength = 0
+      TabOrder = 0
+      Text = 'iInputFile'
+    end
+    object iOutputFile: TFileNameEdit
+      Left = 64
+      Height = 23
+      Top = 48
+      Width = 488
+      FileName = 'iOutputFile'
+      FilterIndex = 0
+      HideDirectories = False
+      ButtonWidth = 23
+      NumGlyphs = 1
+      MaxLength = 0
+      TabOrder = 2
+      Text = 'iOutputFile'
+    end
+    object Label1: TLabel
+      Left = 16
+      Height = 15
+      Top = 16
+      Width = 28
+      Caption = 'Input'
+      ParentColor = False
+    end
+    object Label2: TLabel
+      Left = 16
+      Height = 15
+      Top = 48
+      Width = 38
+      Caption = 'Output'
+      ParentColor = False
+    end
+    object cbInput: TComboBox
+      Left = 560
+      Height = 23
+      Top = 16
+      Width = 100
+      ItemHeight = 15
+      ItemIndex = 0
+      Items.Strings = (
+        'bin'
+        'sbin'
+        'dump'
+      )
+      TabOrder = 1
+      Text = 'bin'
+    end
+    object cbOutput: TComboBox
+      Left = 560
+      Height = 23
+      Top = 48
+      Width = 100
+      ItemHeight = 15
+      TabOrder = 3
+      Text = 'cbOutput'
+    end
+    object bConvert: TBitBtn
+      Left = 672
+      Height = 30
+      Top = 9
+      Width = 75
+      Action = aConvert
+      Kind = bkIgnore
+      ModalResult = 5
+      TabOrder = 4
+    end
+  end
+  object PageControl1: TPageControl
+    Left = 0
+    Height = 513
+    Top = 0
+    Width = 765
+    ActivePage = tsWorking
+    Align = alClient
+    TabIndex = 0
+    TabOrder = 2
+    object tsWorking: TTabSheet
+      Caption = 'Working Area'
+      ClientHeight = 485
+      ClientWidth = 757
+      object tvWorking: TShellTreeView
+        Left = 0
+        Height = 485
+        Top = 0
+        Width = 250
+        Align = alLeft
+        FileSortType = fstNone
+        TabOrder = 0
+        ObjectTypes = [otFolders]
+        ShellListView = lvImport
+      end
+      object Splitter2: TSplitter
+        Left = 250
+        Height = 485
+        Top = 0
+        Width = 5
+      end
+      object lvImport: TShellListView
+        Left = 255
+        Height = 485
+        Top = 0
+        Width = 502
+        Align = alClient
+        Color = clDefault
+        TabOrder = 2
+        OnSelectItem = ShellListSelectItem
+        ObjectTypes = [otNonFolders]
+        ShellTreeView = tvWorking
+      end
+    end
+    object tsArchive: TTabSheet
+      Caption = 'Archive'
+      ClientHeight = 524
+      ClientWidth = 1071
+      object tvDAI: TShellTreeView
+        Left = 0
+        Height = 524
+        Top = 0
+        Width = 250
+        Align = alLeft
+        FileSortType = fstNone
+        TabOrder = 0
+        ObjectTypes = [otFolders]
+        ShellListView = lvArchive
+      end
+      object Splitter1: TSplitter
+        Left = 250
+        Height = 524
+        Top = 0
+        Width = 5
+      end
+      object lvArchive: TShellListView
+        Left = 255
+        Height = 524
+        Top = 0
+        Width = 816
+        Align = alClient
+        Color = clDefault
+        TabOrder = 2
+        OnSelectItem = ShellListSelectItem
+        ObjectTypes = [otNonFolders]
+        ShellTreeView = tvDAI
+      end
+    end
+  end
+  object MainMenu1: TMainMenu
+    Left = 80
+    Top = 24
+    object mnFile: TMenuItem
+      Caption = 'File'
+      object mnConvert: TMenuItem
+        Action = aConvert
+      end
+      object MenuItem1: TMenuItem
+        Action = aRefresh
+      end
+      object MenuItem2: TMenuItem
+        Caption = '-'
+      end
+      object miQuit: TMenuItem
+        Action = aQuit
+      end
+    end
+  end
+  object alMain: TActionList
+    Left = 24
+    Top = 24
+    object aQuit: TAction
+      Caption = '&Exit'
+      OnExecute = aQuitExecute
+    end
+    object aRefresh: TAction
+      Caption = '&Refresh'
+      OnExecute = aRefreshExecute
+      ShortCut = 116
+    end
+    object aConvert: TAction
+      Caption = '&Convert'
+      OnExecute = aConvertExecute
+      ShortCut = 120
+    end
+  end
+end
