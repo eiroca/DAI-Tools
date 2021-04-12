@@ -122,7 +122,7 @@ var
   tIn, tOut: string;
   inPath, outPath: string;
   loadFunc, saveFunc: DAI_func;
-  s: TSegment;
+  s: RSegment;
   Result: boolean;
 begin
   inPath := iInputFile.FileName;
@@ -221,7 +221,8 @@ var
 begin
   basePath := ExtractFilePath(Application.ExeName);
   tvWorking.Root := '';
-  tvWorking.Path:=basePath + 'DAI\working';;
+  tvWorking.Path := basePath + 'DAI\working';
+  ;
   tvDAI.Root := basePath + 'DAI\archive';
   for p in FONT_PATHNAME do begin
     if (FileExists(basePath + p) and DAI_initFont(basePath + p)) then begin

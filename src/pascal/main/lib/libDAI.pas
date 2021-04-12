@@ -23,22 +23,20 @@ uses
   Classes, SysUtils, Graphics;
 
 type
-  DAI_func = function(const outPath: string; var seg: TSegment): boolean;
+  DAI_func = function(const outPath: string; var seg: RSegment): boolean;
 
 function DAI_lastError: string;
 
-function DAI_decodeDump(const Lines: TStringList; var seg: TSegment): boolean;
-
 function DAI_initFont(const path: string): boolean;
 
-function DAI_loadBin(const outPath: string; var seg: TSegment): boolean;
-function DAI_loadSBin(const outPath: string; var seg: TSegment): boolean;
-function DAI_loadDump(const inPath: string; var seg: TSegment): boolean;
+function DAI_loadBin(const outPath: string; var seg: RSegment): boolean;
+function DAI_loadSBin(const outPath: string; var seg: RSegment): boolean;
+function DAI_loadDump(const inPath: string; var seg: RSegment): boolean;
 
-function DAI_saveBin(const outPath: string; var seg: TSegment): boolean;
-function DAI_saveSBin(const outPath: string; var seg: TSegment): boolean;
-function DAI_savePNG(const outPath: string; var seg: TSegment): boolean;
-function DAI_saveDump(const outPath: string; var seg: TSegment): boolean;
+function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
+function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
+function DAI_savePNG(const outPath: string; var seg: RSegment): boolean;
+function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
 
 implementation
 
@@ -48,7 +46,7 @@ uses
 threadvar
   lastError: string;
 
-function _saveSegData(fs: TFileStream; var seg: TSegment): boolean;
+function _saveSegData(fs: TFileStream; var seg: RSegment): boolean;
 var
   i: integer;
 begin
@@ -67,7 +65,7 @@ begin
   end;
 end;
 
-function _loadSegData(fs: TFileStream; sz: integer; var seg: TSegment): boolean;
+function _loadSegData(fs: TFileStream; sz: integer; var seg: RSegment): boolean;
 var
   i: integer;
 begin
@@ -86,30 +84,6 @@ begin
   finally
     fs.Free;
   end;
-end;
-
-// Returns True if `s` looks like a valid UT hex dump line.
-function _isValidLine(const s: string): boolean;
-var
-  i: integer;
-  c: char;
-begin
-  Result := False;
-  if (Length(s) < 7) then begin
-    exit;
-  end;
-  for i := 1 to 7 do begin
-    c := s[i];
-    if i = 5 then begin
-      if (c <> ' ') then begin
-        exit;
-      end;
-    end
-    else if not CharInSet(c, HEXNUM) then begin
-      exit;
-    end;
-  end;
-  Result := True;
 end;
 
 function DAI_initFont(const path: string): boolean;
@@ -138,60 +112,7 @@ begin
   end;
 end;
 
-// Decode `lines` which is in UT hex dump format. Return the binary data and the last address seen.
-//  Example line:
-// 'BFF0 00 00 B8 36 00 00 AF 36 00 00 9F 36 00 00 80 36'
-function DAI_decodeDump(const Lines: TStringList; var seg: TSegment): boolean;
-var
-  s: string;
-  b, i, pos: integer;
-  numByte, saddr, eaddr: integer;
-  minAddr, maxAddr: integer;
-begin
-  Result := False;
-  minAddr := MaxInt;
-  maxAddr := -1;
-  Segment_init(seg);
-  try
-    for s in Lines do begin
-      if not _isValidLine(s) then begin
-        continue;
-      end;
-      numByte := (length(s) - 4) div 3;
-      saddr := Hex2Dec(Copy(s, 1, 4));
-      eaddr := saddr + numByte - 1;
-      if (eaddr > MAX_ADDR) then begin
-        lastError := 'Invalid Address: ' + s;
-        exit;
-      end;
-      pos := 6;
-      if (saddr < minAddr) then begin
-        minAddr := saddr;
-      end;
-      if (eaddr > maxAddr) then begin
-        maxAddr := eaddr;
-      end;
-      for i := saddr to eaddr do begin
-        b := Hex2Dec(copy(s, pos, 2));
-        Inc(pos, 3);
-        seg.Data[i] := b;
-      end;
-    end;
-    seg.addr := minAddr;
-    seg.len := maxAddr - minAddr + 1;
-    seg.Data := Copy(seg.Data, seg.addr, seg.len);
-    Result := False;
-  except
-    on E: EConvertError do begin
-      SetLength(seg.Data, 0);
-      seg.len := 0;
-      lastError := 'Invalid HEX in dump file (' + s + ')';
-    end;
-  end;
-  Result := True;
-end;
-
-function DAI_loadDump(const inPath: string; var seg: TSegment): boolean;
+function DAI_loadDump(const inPath: string; var seg: RSegment): boolean;
 var
   Lines: TStringList;
 begin
@@ -199,14 +120,14 @@ begin
   Lines := TStringList.Create;
   try
     Lines.LoadFromFile(inPath);
-    DAI_decodeDump(Lines, seg);
+    Dump_decode(Lines, seg);
     Result := True;
   finally
     Lines.Free;
   end;
 end;
 
-function DAI_saveDump(const outPath: string; var seg: TSegment): boolean;
+function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
 var
   Lines: TStringList;
   endAddr: integer;
@@ -255,7 +176,7 @@ begin
 end;
 
 
-function DAI_saveBin(const outPath: string; var seg: TSegment): boolean;
+function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
 var
   fs: TFileStream;
 begin
@@ -274,7 +195,7 @@ begin
   end;
 end;
 
-function DAI_saveSBin(const outPath: string; var seg: TSegment): boolean;
+function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
 var
   fs: TFileStream;
 begin
@@ -302,7 +223,7 @@ begin
   end;
 end;
 
-function DAI_loadBin(const outPath: string; var seg: TSegment): boolean;
+function DAI_loadBin(const outPath: string; var seg: RSegment): boolean;
 var
   fs: TFileStream;
   sz: integer;
@@ -318,7 +239,7 @@ begin
   lastError := '';
 end;
 
-function DAI_loadSBin(const outPath: string; var seg: TSegment): boolean;
+function DAI_loadSBin(const outPath: string; var seg: RSegment): boolean;
 var
   fs: TFileStream;
   sz: integer;
@@ -348,7 +269,7 @@ begin
   Result := lastError;
 end;
 
-function DAI_savePNG(const outPath: string; var seg: TSegment): boolean;
+function DAI_savePNG(const outPath: string; var seg: RSegment): boolean;
 var
   curAddr: integer;
   B: TPortableNetworkGraphic;

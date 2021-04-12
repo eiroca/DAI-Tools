@@ -15,6 +15,7 @@
 unit libDAIGraph;
 
 {$mode objfpc}{$H+}
+{$inline off}
 
 interface
 
@@ -61,35 +62,36 @@ type
     line_pxlHei: integer;
     line_colCnt: integer;
     line_pxlWdt: integer;
+    cw: word;
   end;
 
-function DAI_decodeControlWord(var seg: TSegment; var curAddr: integer): ControlWord;
-function DAI_decodeFrameBuffer(var seg: TSegment; curAddr: integer; C: TCanvas): boolean;
+function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
+function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
 
 implementation
 
-function DAI_decodeControlWord(var seg: TSegment; var curAddr: integer): ControlWord;
+function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 var
-  b: byte;
+  b1, b2: byte;
 begin
   with Result do begin
-    b := seg.Data[curAddr];
+    b1 := seg.Data[curAddr];
     Dec(curAddr);
     // Bits:
     //  7 - 1=16col 0=4col
     //  6 - text=1 graphic=0
     //  5, 4 - resolution control
     //  3, 2, 1, 0 - line repeat count
-    resolution := (b shr 4) and $03;
-    mode := (b shr 6) and $03;
-    repLines := b and $0F;
-    b := seg.Data[curAddr];
+    resolution := (b1 shr 4) and $03;
+    mode := (b1 shr 6) and $03;
+    repLines := b1 and $0F;
+    b2 := seg.Data[curAddr];
     Dec(curAddr);
     // Low address byte (color byte)
-    enable_change := (b and $80) <> 0;
-    unit_color := (b and $40) = 0;
-    color_reg := (b shr 4) and $03;
-    color_sel := b and $0F;
+    enable_change := (b2 and $80) <> 0;
+    unit_color := (b2 and $40) = 0;
+    color_reg := (b2 shr 4) and $03;
+    color_sel := b2 and $0F;
     if (enable_change) then begin
       DAI_COLORREG[color_reg] := color_sel;
     end;
@@ -104,6 +106,7 @@ begin
     else begin
       data_size := line_colCnt * 2;
     end;
+    cw := b1 shl 8 or b2;
   end;
 end;
 
@@ -141,9 +144,11 @@ begin
   for j := 0 to yl - 1 do begin
     posX := (i * 8) * xl;
     charData := FONT[posC];
-    Inc(posC);
+    if (j and 1) = 1 then begin
+      Inc(posC);
+    end;
     for k := 0 to 7 do begin
-      colIdx := (((charData shr k) and $01) shl 1) or ((data2 shr (7 - k)) and $01);
+      colIdx := ((charData shr k) and $01) or (((data2 shr k) and $01) shl 1);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
       for s := 0 to xl - 1 do begin
         C.Pixels[posX, posY] := col;
@@ -154,7 +159,7 @@ begin
   end;
 end;
 
-procedure _fillColor4(var seg: TSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
+procedure _fillColor4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -168,7 +173,7 @@ begin
   end;
 end;
 
-procedure _fillText4(var seg: TSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
+procedure _fillText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -182,7 +187,7 @@ begin
   end;
 end;
 
-procedure _decodeGraph4(var seg: TSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
+procedure _decodeGraph4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -196,7 +201,7 @@ begin
   end;
 end;
 
-procedure _decodeText4(var seg: TSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
+procedure _decodeText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -255,7 +260,9 @@ begin
   for j := 0 to yl - 1 do begin
     posX := (i * 8) * xl;
     charData := FONT[posC];
-    Inc(posC);
+    if (j and 1) = 1 then begin
+      Inc(posC);
+    end;
     for k := 0 to 7 do begin
       if ((charData shr k) and $01) <> 0 then begin
         colIdx := c2;
@@ -273,7 +280,7 @@ begin
   end;
 end;
 
-procedure _fillColor16(var seg: TSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
+procedure _fillColor16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -287,7 +294,7 @@ begin
   end;
 end;
 
-procedure _fillText16(var seg: TSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
+procedure _fillText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -301,7 +308,7 @@ begin
   end;
 end;
 
-procedure _decodeGraph16(var seg: TSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
+procedure _decodeGraph16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -315,7 +322,7 @@ begin
   end;
 end;
 
-procedure _decodeText16(var seg: TSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
+procedure _decodeText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -329,7 +336,7 @@ begin
   end;
 end;
 
-function DAI_decodeFrameBuffer(var seg: TSegment; curAddr: integer; C: TCanvas): boolean;
+function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
 var
   curLin: integer;
   CW: ControlWord;
