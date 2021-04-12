@@ -57,11 +57,16 @@ uses
 
 const
   MAX_LOOK_HEAD = 10;
-  DUMP_NAME: array [EDumpType] of string = ('Invalid', 'DAI computer', 'Apple 2', 'MAME');
   DUMP_SIGN: array [EDumpType] of integer = (0, %11110111111111, %1111011011111111, %111101011011111111);
   DUMP_MASK: array [EDumpType] of integer = (0, %11111111111111, %1111111111111111, %111111111111111111);
   DUMP_ODAT: array [EDumpType] of integer = (0, 2, 3, 4);
   DUMP_MLEN: array [EDumpType] of integer = (0, $FFFF, $FFFF, 16);
+
+const
+  N_LOADADDR: UnicodeString= '/LoadAddress';
+  N_ENTRYPOINT: UnicodeString= '/EntryPoint';
+  N_TYPE: UnicodeString= '/Type';
+  N_LENGTH: UnicodeString= '/Length';
 
 procedure Segment_init(var seg: RSegment; const size: integer);
 begin
@@ -87,10 +92,46 @@ begin
     aName := 'segment';
   end;
   try
-    conf.SetValue(aName + '/LoadAddress', seg.addr);
-    conf.SetValue(aName + '/Length', seg.len);
-    conf.SetDeleteValue(aName + '/EntryPoint', seg.entrypoint, 0);
-    conf.SetDeleteValue(aName + '/Type', seg.segType, 0);
+    conf.SetValue(aName + N_LOADADDR, seg.addr);
+    conf.SetValue(aName + N_LENGTH, seg.len);
+    conf.SetDeleteValue(aName + N_ENTRYPOINT, seg.entrypoint, 0);
+    conf.SetDeleteValue(aName + N_TYPE, seg.segType, 0);
+  finally
+    conf.Free;
+  end;
+end;
+
+function _readBound(conf: TJsonConfig; Name: UnicodeString; def: integer; min: integer; max: integer):integer;
+begin
+  Result := conf.GetValue(Name, def);
+  if (Result < min) then begin
+    Result := min;
+  end
+  else if (Result > max) then begin
+    Result := max;
+  end;
+end;
+
+procedure Segment_laodMetadata(var seg: RSegment; const path: string);
+var
+  conf: TJsonConfig;
+  aName: UnicodeString;
+begin
+  conf := TJSONConfig.Create(nil);
+  conf.Filename := path;
+  conf.Formatted := True;
+  aName := seg.Name;
+  if (aName = '') then begin
+    aName := 'segment';
+  end;
+  try
+    with seg do begin
+      addr := _readBound(conf, aName + N_LOADADDR, addr, 0, MAX_ADDR);
+      entrypoint := _readBound(conf, aName + N_ENTRYPOINT, entrypoint, 0, MAX_ADDR);
+      segType := conf.GetValue(aName + N_TYPE, segType);
+      len := _readBound(conf, aName + N_LENGTH, seg.len, 0, MAX_ADDR+1);
+      SetLength(seg.Data, seg.len);
+    end;
   finally
     conf.Free;
   end;

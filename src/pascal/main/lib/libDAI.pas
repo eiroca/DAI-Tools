@@ -38,10 +38,9 @@ function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_savePNG(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
 
-implementation
+function DAI_saveDAIbin(const outPath: string; var seg: RSegment): boolean;
 
-uses
-  StrUtils;
+implementation
 
 threadvar
   lastError: string;
@@ -175,7 +174,6 @@ begin
   end;
 end;
 
-
 function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
 var
   fs: TFileStream;
@@ -305,5 +303,93 @@ begin
   end;
 end;
 
-end.
+// Calculate the checksum following the DAI protocol
+function Checksum(cs: integer; n: integer): integer;
+var
+  ret: integer;
+begin
+  ret := 0;
+  cs := cs xor n;
+  if cs >= 128 then begin
+    ret := 1;
+  end;
+  cs := (cs shl 1) and $FF or ret;
+  Result := cs;
+end;
 
+function DAI_saveDAIbin(const outPath: string; var seg: RSegment): boolean;
+var
+  FNLength: integer;
+  fs: TFileStream;
+  c, cs: integer;
+  b: byte;
+  car: char;
+  addrL, addrH: integer;
+  sizeL, sizeH: integer;
+begin
+  Result := False;
+  fs := TFileStream.Create(outPath, fmCreate);
+  try
+    try
+      // File Type = 49 (31H for Binary file to load in UT with "R" command)
+      fs.WriteByte($31);
+      // Name Length
+      FNLength := Length(seg.Name);
+      cs := 86;
+      fs.writeByte(0);
+      cs := Checksum(cs, 0);
+      fs.writeByte(FNLength);
+      cs := Checksum(cs, FNLength);
+      fs.writeByte(cs);
+      // Name
+      cs := 86;
+      for car in seg.Name do begin
+        c := Ord(car);
+        fs.writeByte(c);
+        cs := Checksum(cs, c);
+      end;
+      fs.writeByte(cs);
+      // Length of Address
+      fs.writeByte(0);
+      fs.writeByte(2);
+      fs.writeByte(93);
+      // Start Address
+      cs := 86;
+      addrL := seg.addr and $FF;
+      addrH := (seg.addr shr 8) and $FF;
+      fs.writeByte(addrL);
+      cs := Checksum(cs, addrL);
+      fs.writeByte(addrH);
+      cs := Checksum(cs, addrH);
+      fs.writeByte(cs);
+      // Length of Content
+      sizeL := seg.len and 255;
+      sizeH := (seg.len shr 8) and 255;
+      cs := 86;
+      fs.writeByte(sizeH);
+      cs := Checksum(cs, sizeH);
+      fs.writeByte(sizeL);
+      cs := Checksum(cs, sizeL);
+      fs.writeByte(cs);
+      // Content
+      cs := 86;
+      for b in seg.Data do begin
+        fs.writeByte(b);
+        cs := Checksum(cs, b);
+      end;
+      fs.writeByte(cs);
+      Result := True;
+      lastError := '';
+    except
+      on E: Exception do begin
+        lastError := 'Expception: ' + E.Message;
+        exit;
+      end;
+    end;
+  finally
+    fs.Free;
+  end;
+end;
+
+
+end.

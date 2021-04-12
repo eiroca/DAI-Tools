@@ -86,8 +86,9 @@ uses
 const
   INPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'png');
   INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump, nil);
-  OUTPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'png');
-  OUTPUT_CALLS: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_savePNG);
+  OUTPUT_TYPE: array of string = ('bin', 'sbin', 'dump', 'png', 'DAI (bin)');
+  OUTPUT_EXT: array of string = ('bin', 'sbin', 'dump', 'png', 'DAI');
+  OUTPUT_CALLS: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_savePNG, @DAI_saveDAIbin);
 
   FONT_PATHNAME: array of string = ('DAI\ROMS\nch.bin', 'DAI\nch.bin', 'nch.bin');
 
@@ -139,6 +140,7 @@ begin
   end;
   loadFunc := INPUT_CALLS[cbInput.ItemIndex];
   saveFunc := OUTPUT_CALLS[cbOutput.ItemIndex];
+  tOut:= OUTPUT_EXT[cbOutput.ItemIndex];
   if (loadFunc = nil) or (saveFunc = nil) then begin
     SetStatus(Format('Conversion from %s to %s is not supported yet!', [tIn, tOut]));
     exit;
@@ -224,7 +226,6 @@ begin
   basePath := ExtractFilePath(Application.ExeName);
   tvWorking.Root := '';
   tvWorking.Path := basePath + 'DAI\working';
-  ;
   tvDAI.Root := basePath + 'DAI\archive';
   for p in FONT_PATHNAME do begin
     if (FileExists(basePath + p) and DAI_initFont(basePath + p)) then begin
@@ -240,7 +241,7 @@ begin
   cbInput.Items.AddStrings(INPUT_TYPES);
   cbInput.ItemIndex := 0;
   cbOutput.Items.Clear;
-  cbOutput.Items.AddStrings(OUTPUT_TYPES);
+  cbOutput.Items.AddStrings(OUTPUT_TYPE);
   cbOutput.ItemIndex := 0;
 end;
 
