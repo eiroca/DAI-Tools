@@ -36,6 +36,7 @@ type
     );
 
   RSegment = record
+    Name: string;
     addr: uint16;
     len: uint16;
     entrypoint: uint16;
@@ -44,6 +45,7 @@ type
   end;
 
 procedure Segment_init(var seg: RSegment; const size: integer = (MAX_ADDR + 1));
+procedure Segment_writeMetadata(var seg: RSegment; const path: string);
 
 function Dump_detect(const Lines: TStringList): EDumpType;
 function Dump_decode(const Lines: TStringList; var seg: RSegment): boolean;
@@ -51,7 +53,7 @@ function Dump_decode(const Lines: TStringList; var seg: RSegment): boolean;
 implementation
 
 uses
-  StrUtils, Math;
+  StrUtils, Math, jsonConf;
 
 const
   MAX_LOOK_HEAD = 10;
@@ -69,6 +71,28 @@ begin
     entrypoint := 0;
     segType := 0;
     SetLength(Data, size);
+  end;
+end;
+
+procedure Segment_writeMetadata(var seg: RSegment; const path: string);
+var
+  conf: TJsonConfig;
+  aName: UnicodeString;
+begin
+  conf := TJSONConfig.Create(nil);
+  conf.Filename := path;
+  conf.Formatted := True;
+  aName := seg.Name;
+  if (aName = '') then begin
+    aName := 'segment';
+  end;
+  try
+    conf.SetValue(aName + '/LoadAddress', seg.addr);
+    conf.SetValue(aName + '/Length', seg.len);
+    conf.SetDeleteValue(aName + '/EntryPoint', seg.entrypoint, 0);
+    conf.SetDeleteValue(aName + '/Type', seg.segType, 0);
+  finally
+    conf.Free;
   end;
 end;
 

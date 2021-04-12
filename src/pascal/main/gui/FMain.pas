@@ -144,6 +144,7 @@ begin
     exit;
   end;
   outPath := getOutputPath(inPath, tOut);
+  s.Name := ExtractFileName(outPath);
   s.len := 0;
   Result := loadFunc(inPath, s);
   if not Result then begin
@@ -155,6 +156,7 @@ begin
     SetStatus(DAI_lastError());
     exit;
   end;
+  Segment_writeMetadata(s, ExtractFileDir(outPath) + '\metadata.json');
   SetStatus(Format('Conversion of %s in %s done!', [fName, ExtractFilename(outPath)]));
   Refresh();
 end;
