@@ -79,7 +79,7 @@ var
 implementation
 
 uses
-  libDAI;
+  libTools, libDAI;
 
 {$R *.lfm}
 
