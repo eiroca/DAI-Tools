@@ -63,10 +63,10 @@ const
   DUMP_MLEN: array [EDumpType] of integer = (0, $FFFF, $FFFF, 16);
 
 const
-  N_LOADADDR: UnicodeString= '/LoadAddress';
-  N_ENTRYPOINT: UnicodeString= '/EntryPoint';
-  N_TYPE: UnicodeString= '/Type';
-  N_LENGTH: UnicodeString= '/Length';
+  N_LOADADDR: UnicodeString = '/LoadAddress';
+  N_ENTRYPOINT: UnicodeString = '/EntryPoint';
+  N_TYPE: UnicodeString = '/Type';
+  N_LENGTH: UnicodeString = '/Length';
 
 procedure Segment_init(var seg: RSegment; const size: integer);
 begin
@@ -101,7 +101,7 @@ begin
   end;
 end;
 
-function _readBound(conf: TJsonConfig; Name: UnicodeString; def: integer; min: integer; max: integer):integer;
+function _readBound(conf: TJsonConfig; Name: UnicodeString; def: integer; min: integer; max: integer): integer;
 begin
   Result := conf.GetValue(Name, def);
   if (Result < min) then begin
@@ -129,7 +129,7 @@ begin
       addr := _readBound(conf, aName + N_LOADADDR, addr, 0, MAX_ADDR);
       entrypoint := _readBound(conf, aName + N_ENTRYPOINT, entrypoint, 0, MAX_ADDR);
       segType := conf.GetValue(aName + N_TYPE, segType);
-      len := _readBound(conf, aName + N_LENGTH, seg.len, 0, MAX_ADDR+1);
+      len := _readBound(conf, aName + N_LENGTH, seg.len, 0, MAX_ADDR + 1);
       SetLength(seg.Data, seg.len);
     end;
   finally

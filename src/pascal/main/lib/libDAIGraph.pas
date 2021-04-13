@@ -25,12 +25,14 @@ uses
   Graphics;
 
 const
-  DAI_SCEREEN_WIDTH_MAX = 352;
-  DAI_SCEREEN_HEIGTH_MAX = 260;
-  DAI_SCAN_LINES = 604;
+  PAL_SCANLINES = 604;
+  PAL_SCANLINES_VISIBLE = 528;
 
-  IMAGE_WIDTH_MAX = DAI_SCEREEN_WIDTH_MAX * 3;
-  IMAGE_HEIGTH_MAX = DAI_SCAN_LINES;
+  DAI_SCREEN_WIDTH = 352;
+  DAI_SCREEN_LINES = PAL_SCANLINES_VISIBLE div 2;
+
+  DAI_IMAGE_WIDTH = DAI_SCREEN_WIDTH * 3;
+  DAI_IMAGE_LINES = PAL_SCANLINES div 2 * 3;
 
   FONTCHAR_SIZE = 4 * 1024;
 
@@ -43,9 +45,9 @@ var
 const
   RES_HEIGHT: array[0..3] of integer = (260, 260, 260, 240);
   RES_WIDTH: array[0..3] of integer = (88, 176, 352, 528);
-  RES_SCALE: array[0..3] of integer = (4, 2, 1, 0);
   RES_COLS: array[0..3] of integer = (11, 22, 44, 66);
-  RES_XRES: array[0..3] of integer = (12, 6, 3, 2);
+  RES_PXL: array[0..3] of integer = (4, 2, 1, 1);
+  RES_DOT: array[0..3] of integer = (12, 6, 3, 2);
 
 type
   ControlWord = record
@@ -59,18 +61,38 @@ type
     //
     data_size: integer;
     line_width: integer;
-    line_pxlHei: integer;
     line_colCnt: integer;
+    line_dotHei: integer;
+    line_dotWdt: integer;
+    line_pxlHei: integer;
     line_pxlWdt: integer;
-    cw: word;
   end;
 
-function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
+  RModeInfo = record
+    min: integer;
+    max: integer;
+    col_04: boolean;
+    col_16: boolean;
+  end;
+
+  EMode = (mText, mGraph, mFill);
+
+  RFrameBufferInfo = record
+    stat: array [EMode] of RModeInfo;
+    numCW: integer;
+    sizeVis, sizeFull: integer;
+  end;
+
+function DAI_infoFrameBuffer(var seg: RSegment; curAddr: integer; var fbi: RFrameBufferInfo): boolean;
+function DAI_decodeFullFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
 function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
 
 implementation
 
-function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
+{$Include libDAIGraph_accurate.inc}
+{$Include libDAIGraph_fast.inc}
+
+function _decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 var
   b1, b2: byte;
 begin
@@ -98,272 +120,158 @@ begin
     //... computations
     line_width := RES_WIDTH[resolution];
     line_colCnt := RES_COLS[resolution];
-    line_pxlWdt := RES_XRES[resolution];
-    line_pxlHei := (repLines + 1) * 2;
+    line_pxlHei := (repLines + 1);
+    line_pxlWdt := RES_PXL[resolution];
+    line_dotHei := (repLines + 1) * 3;
+    line_dotWdt := RES_DOT[resolution];
     if unit_color then begin
       data_size := 2;
     end
     else begin
       data_size := line_colCnt * 2;
     end;
-    cw := b1 shl 8 or b2;
   end;
 end;
 
-procedure _drawBlockGraph4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
-var
-  j, k, s: integer;
-  col: TColor;
-  colIdx: integer;
-  posX, posY: integer;
-begin
-  posY := curScanLine;
-  for j := 0 to yl - 1 do begin
-    posX := (i * 8) * xl;
-    for k := 0 to 7 do begin
-      colIdx := (((data1 shr (7 - k)) and $01) shl 1) or ((data2 shr (7 - k)) and $01);
-      col := DAI_PALETTE[DAI_COLORREG[colIdx]];
-      for s := 0 to xl - 1 do begin
-        C.Pixels[posX, posY] := col;
-        Inc(posX);
-      end;
-    end;
-    Inc(posY);
-  end;
-end;
-
-procedure _drawBlockText4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
-var
-  j, k, s: integer;
-  col: TColor;
-  charData, colIdx: integer;
-  posX, posY, posC: integer;
-begin
-  posC := data1 * 16;
-  posY := curScanLine;
-  for j := 0 to yl - 1 do begin
-    posX := (i * 8) * xl;
-    charData := FONT[posC];
-    if (j and 1) = 1 then begin
-      Inc(posC);
-    end;
-    for k := 0 to 7 do begin
-      colIdx := ((charData shr k) and $01) or (((data2 shr k) and $01) shl 1);
-      col := DAI_PALETTE[DAI_COLORREG[colIdx]];
-      for s := 0 to xl - 1 do begin
-        C.Pixels[posX, posY] := col;
-        Inc(posX);
-      end;
-    end;
-    Inc(posY);
-  end;
-end;
-
-procedure _fillColor4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
-var
-  data1, data2: integer;
-  i: integer;
-begin
-  data1 := seg.Data[curAddr];
-  Dec(curAddr);
-  data2 := seg.Data[curAddr];
-  Dec(curAddr);
-  for  i := 0 to xc - 1 do begin
-    _drawBlockGraph4(data1, data2, i, curScanLine, xl, yl, C);
-  end;
-end;
-
-procedure _fillText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
-var
-  data1, data2: integer;
-  i: integer;
-begin
-  data1 := seg.Data[curAddr];
-  Dec(curAddr);
-  data2 := seg.Data[curAddr];
-  Dec(curAddr);
-  for  i := 0 to xc - 1 do begin
-    _drawBlockText4(data1, data2, i, curScanLine, xl, yl, C);
-  end;
-end;
-
-procedure _decodeGraph4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
-var
-  data1, data2: integer;
-  i: integer;
-begin
-  for  i := 0 to xc - 1 do begin
-    data1 := seg.Data[curAddr];
-    Dec(curAddr);
-    data2 := seg.Data[curAddr];
-    Dec(curAddr);
-    _drawBlockGraph4(data1, data2, i, curScanLine, xl, yl, C);
-  end;
-end;
-
-procedure _decodeText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
-var
-  data1, data2: integer;
-  i: integer;
-begin
-  for  i := 0 to xc - 1 do begin
-    data1 := seg.Data[curAddr];
-    Dec(curAddr);
-    data2 := seg.Data[curAddr];
-    Dec(curAddr);
-    _drawBlockText4(data1, data2, i, curScanLine, xl, yl, C);
-  end;
-end;
-
-procedure _drawBlockGraph16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
-var
-  j, k, s: integer;
-  col: TColor;
-  colIdx: integer;
-  posX, posY: integer;
-  c1, c2: integer;
-begin
-  posY := curScanLine;
-  c1 := data2 and $0F;
-  c2 := (data2 shr 4) and $0F;
-  for j := 0 to yl - 1 do begin
-    posX := (i * 8) * xl;
-    for k := 0 to 7 do begin
-      if ((data1 shr (7 - k)) and $01) <> 0 then begin
-        colIdx := c2;
-      end
-      else begin
-        colIdx := c1;
-      end;
-      col := DAI_PALETTE[colIdx];
-      for s := 0 to xl - 1 do begin
-        C.Pixels[posX, posY] := col;
-        Inc(posX);
-      end;
-    end;
-    Inc(posY);
-  end;
-end;
-
-procedure _drawBlockText16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
-var
-  j, k, s: integer;
-  col: TColor;
-  charData, colIdx: integer;
-  posX, posY, posC: integer;
-  c1, c2: integer;
-begin
-  posY := curScanLine;
-  posC := data1 * 16;
-  c1 := data2 and $0F;
-  c2 := (data2 shr 4) and $0F;
-  for j := 0 to yl - 1 do begin
-    posX := (i * 8) * xl;
-    charData := FONT[posC];
-    if (j and 1) = 1 then begin
-      Inc(posC);
-    end;
-    for k := 0 to 7 do begin
-      if ((charData shr k) and $01) <> 0 then begin
-        colIdx := c2;
-      end
-      else begin
-        colIdx := c1;
-      end;
-      col := DAI_PALETTE[colIdx];
-      for s := 0 to xl - 1 do begin
-        C.Pixels[posX, posY] := col;
-        Inc(posX);
-      end;
-    end;
-    Inc(posY);
-  end;
-end;
-
-procedure _fillColor16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
-var
-  data1, data2: integer;
-  i: integer;
-begin
-  data1 := seg.Data[curAddr];
-  Dec(curAddr);
-  data2 := seg.Data[curAddr];
-  Dec(curAddr);
-  for  i := 0 to xc - 1 do begin
-    _drawBlockGraph16(data1, data2, i, curScanLine, xl, yl, C);
-  end;
-end;
-
-procedure _fillText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
-var
-  data1, data2: integer;
-  i: integer;
-begin
-  data1 := seg.Data[curAddr];
-  Dec(curAddr);
-  data2 := seg.Data[curAddr];
-  Dec(curAddr);
-  for  i := 0 to xc - 1 do begin
-    _drawBlockText16(data1, data2, i, curScanLine, xl, yl, C);
-  end;
-end;
-
-procedure _decodeGraph16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
-var
-  data1, data2: integer;
-  i: integer;
-begin
-  for  i := 0 to xc - 1 do begin
-    data1 := seg.Data[curAddr];
-    Dec(curAddr);
-    data2 := seg.Data[curAddr];
-    Dec(curAddr);
-    _drawBlockGraph16(data1, data2, i, curScanLine, xl, yl, C);
-  end;
-end;
-
-procedure _decodeText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
-var
-  data1, data2: integer;
-  i: integer;
-begin
-  for  i := 0 to xc - 1 do begin
-    data1 := seg.Data[curAddr];
-    Dec(curAddr);
-    data2 := seg.Data[curAddr];
-    Dec(curAddr);
-    _drawBlockText16(data1, data2, i, curScanLine, xl, yl, C);
-  end;
-end;
-
-function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+function DAI_infoFrameBuffer(var seg: RSegment; curAddr: integer; var fbi: RFrameBufferInfo): boolean;
 var
   curLin: integer;
   CW: ControlWord;
+  e: EMode;
+  v: integer;
+  col16: boolean;
 begin
   Result := False;
   curLin := 0;
-  while (curLin < DAI_SCAN_LINES) do begin
+  with fbi do begin
+    for e in EMode do begin
+      with  stat[e] do begin
+        min := MaxInt;
+        max := 0;
+        col_16 := False;
+        col_04 := False;
+      end;
+    end;
+    numCW := 0;
+    sizeFull := 0;
+    sizeVis := 0;
+    while (curLin < PAL_SCANLINES) do begin
+      if (curAddr < 1) then begin
+        exit;
+      end;
+      CW := _decodeControlWord(seg, curAddr);
+      Inc(numCW);
+      if (curAddr < (CW.data_size - 1)) then begin
+        exit;
+      end;
+      Dec(curAddr, CW.data_size);
+      if CW.unit_color then begin
+        e := mFill;
+        v := CW.line_width;
+        case CW.mode of
+          %00: begin
+            col16 := False;
+          end;
+          %01: begin
+            col16 := True;
+          end;
+          %10: begin
+            col16 := False;
+          end;
+          %11: begin
+            col16 := True;
+          end;
+          else begin
+          end;
+        end;
+      end
+      else begin
+        case CW.mode of
+          %00: begin
+            col16 := False;
+            v := CW.line_width;
+            e := mGraph;
+          end;
+          %01: begin
+            col16 := True;
+            v := CW.line_colCnt;
+            e := mText;
+          end;
+          %10: begin
+            col16 := False;
+            v := CW.line_width;
+            e := mGraph;
+          end;
+          %11: begin
+            col16 := True;
+            v := CW.line_colCnt;
+            e := mText;
+          end;
+          else begin
+          end;
+        end;
+      end;
+      with stat[e] do begin
+        if (col16) then begin
+          col_16 := True;
+        end
+        else begin
+          col_04 := True;
+        end;
+        if min > v then begin
+          min := v;
+        end;
+        if max < v then begin
+          max := v;
+        end;
+      end;
+      Inc(sizeFull, 2 + CW.data_size);
+      if (curLin < PAL_SCANLINES_VISIBLE) then begin
+        Inc(sizeVis, 2 + CW.data_size);
+      end;
+      Inc(curLin, CW.line_dotHei);
+    end;
+    for e in EMode do begin
+      with  stat[e] do begin
+        if (min > max) then begin
+          min := max;
+        end;
+      end;
+    end;
+  end;
+  Result := True;
+end;
+
+function DAI_decodeFullFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+var
+  curLin: integer;
+  CW: ControlWord;
+  rows: integer;
+begin
+  Result := False;
+  curLin := 0;
+  rows := DAI_IMAGE_LINES;
+  while (curLin < rows) do begin
     if (curAddr < 1) then begin
       exit;
     end;
-    CW := DAI_decodeControlWord(seg, curAddr);
+    CW := _decodeControlWord(seg, curAddr);
     if (curAddr < (CW.data_size - 1)) then begin
       exit;
     end;
     if CW.unit_color then begin
       case CW.mode of
         %00: begin
-          _fillColor4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, C);
+          _fillColor4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
         end;
         %01: begin
-          _fillText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, C);
+          _fillText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
         end;
         %10: begin
-          _fillColor16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, C);
+          _fillColor16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
         end;
         %11: begin
-          _fillText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, C);
+          _fillText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
         end;
         else begin
         end;
@@ -372,16 +280,76 @@ begin
     else begin
       case CW.mode of
         %00: begin
-          _decodeGraph4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, C);
+          _decodeGraph4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
         end;
         %01: begin
-          _decodeText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, C);
+          _decodeText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
         end;
         %10: begin
-          _decodeGraph16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, C);
+          _decodeGraph16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
         end;
         %11: begin
-          _decodeText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, C);
+          _decodeText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+        else begin
+        end;
+      end;
+    end;
+    Inc(curLin, CW.line_dotHei);
+  end;
+  Result := True;
+end;
+
+function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+var
+  curLin: integer;
+  CW: ControlWord;
+  rows: integer;
+  rescale: boolean;
+begin
+  Result := False;
+  curLin := 0;
+  rows := DAI_SCREEN_LINES;
+  while (curLin < rows) do begin
+    if (curAddr < 1) then begin
+      exit;
+    end;
+    CW := _decodeControlWord(seg, curAddr);
+    if (curAddr < (CW.data_size - 1)) then begin
+      exit;
+    end;
+    rescale := CW.line_width = 528;
+    if CW.unit_color then begin
+      case CW.mode of
+        %00: begin
+          _fastFillColor4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
+        end;
+        %01: begin
+          _fastFillText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
+        end;
+        %10: begin
+          _fastFillColor16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
+        end;
+        %11: begin
+          _fastFillText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
+        end;
+        else begin
+        end;
+      end;
+    end
+    else begin
+      case CW.mode of
+        %00: begin
+          _fastDecodeGraph4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
+        end;
+        %01: begin
+          _fastDecodeText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
+        end;
+        %10: begin
+          _fastDecodeGraph16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
+        end;
+        %11: begin
+          _fastDecodeText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
         end;
         else begin
         end;

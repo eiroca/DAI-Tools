@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="5">
+    <Units Count="7">
       <Unit0>
         <Filename Value="DAITools.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -55,6 +55,14 @@
         <Filename Value="lib\libTools.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit4>
+      <Unit5>
+        <Filename Value="lib\libDAIGraph_accurate.inc"/>
+        <IsPartOfProject Value="True"/>
+      </Unit5>
+      <Unit6>
+        <Filename Value="lib\libDAIGraph_fast.inc"/>
+        <IsPartOfProject Value="True"/>
+      </Unit6>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -64,7 +72,7 @@
       <Filename Value="$Env(BUILD_PATH)DAI-Tools\DAITools"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir)"/>
+      <IncludeFiles Value="$(ProjOutDir);lib"/>
       <OtherUnitFiles Value="gui;lib"/>
       <UnitOutputDirectory Value="$Env(BUILD_PATH)DAI-Tools\lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>

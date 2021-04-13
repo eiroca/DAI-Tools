@@ -84,11 +84,11 @@ uses
 {$R *.lfm}
 
 const
-  INPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'png');
-  INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump, nil);
-  OUTPUT_TYPE: array of string = ('bin', 'sbin', 'dump', 'png', 'DAI (bin)');
-  OUTPUT_EXT: array of string = ('bin', 'sbin', 'dump', 'png', 'DAI');
-  OUTPUT_CALLS: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_savePNG, @DAI_saveDAIbin);
+  INPUT_TYPES: array of string = ('bin', 'sbin', 'dump');
+  INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump);
+  OUTPUT_TYPE: array of string = ('bin', 'sbin', 'dump', 'png (full)', 'png (fast)', 'DAI (bin)');
+  OUTPUT_EXTS: array of string = ('bin', 'sbin', 'dump', 'png', 'png', 'DAI');
+  OUTPUT_CALL: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_saveFullPNG, @DAI_savePNG, @DAI_saveDAIbin);
 
   FONT_PATHNAME: array of string = ('DAI\ROMS\nch.bin', 'DAI\nch.bin', 'nch.bin');
 
@@ -139,8 +139,8 @@ begin
     exit;
   end;
   loadFunc := INPUT_CALLS[cbInput.ItemIndex];
-  saveFunc := OUTPUT_CALLS[cbOutput.ItemIndex];
-  tOut:= OUTPUT_EXT[cbOutput.ItemIndex];
+  saveFunc := OUTPUT_CALL[cbOutput.ItemIndex];
+  tOut := OUTPUT_EXTS[cbOutput.ItemIndex];
   if (loadFunc = nil) or (saveFunc = nil) then begin
     SetStatus(Format('Conversion from %s to %s is not supported yet!', [tIn, tOut]));
     exit;
