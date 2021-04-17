@@ -21,8 +21,7 @@ uses //
   cthreads, {$ENDIF} {$ENDIF}
   Interfaces, // this includes the LCL widgetset
   Forms,
-  FMain,
-  libDAI;
+  FMain, libAudio, libDAI, libTools;
 
 {$R *.res}
 

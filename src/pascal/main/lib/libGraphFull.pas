@@ -1,3 +1,32 @@
+(* Copyright (C) 2020-2021 Enrico Croce - AGPL >= 3.0
+*
+* This program is free software: you can redistribute it and/or modify it under the terms of the
+* GNU Affero General Public License as published by the Free Software Foundation, either version 3
+* of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+* Affero General Public License for more details.
+*
+* You should have received a copy of the GNU Affero General Public License along with this program.
+* If not, see <http://www.gnu.org/licenses/>.
+*
+*)
+unit libGraphFull;
+
+{$mode objfpc}{$H+}
+
+interface
+
+uses
+  libGraph, libTools,
+  Classes, SysUtils,
+  Graphics;
+
+function DAI_decodeFullFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+
+implementation
+
 procedure _drawBlockGraph4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
 var
   j, k, s: integer;
@@ -112,7 +141,7 @@ begin
   end;
 end;
 
-procedure _fillColor4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas); inline;
+procedure _fillColor4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -126,7 +155,7 @@ begin
   end;
 end;
 
-procedure _fillText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas); inline;
+procedure _fillText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -140,7 +169,7 @@ begin
   end;
 end;
 
-procedure _decodeGraph4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas); inline;
+procedure _decodeGraph4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -154,7 +183,7 @@ begin
   end;
 end;
 
-procedure _decodeText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas); inline;
+procedure _decodeText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -168,7 +197,7 @@ begin
   end;
 end;
 
-procedure _fillColor16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas); inline;
+procedure _fillColor16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -182,7 +211,7 @@ begin
   end;
 end;
 
-procedure _fillText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas); inline;
+procedure _fillText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -196,7 +225,7 @@ begin
   end;
 end;
 
-procedure _decodeGraph16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas); inline;
+procedure _decodeGraph16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -210,7 +239,7 @@ begin
   end;
 end;
 
-procedure _decodeText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas); inline;
+procedure _decodeText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; C: TCanvas);
 var
   data1, data2: integer;
   i: integer;
@@ -224,4 +253,59 @@ begin
   end;
 end;
 
+function DAI_decodeFullFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+var
+  curLin: integer;
+  CW: ControlWord;
+  rows: integer;
+begin
+  Result := False;
+  curLin := 0;
+  rows := DAI_IMAGE_LINES;
+  while (curLin < rows) do begin
+    if (curAddr < 1) then begin
+      exit;
+    end;
+    CW := DAI_decodeControlWord(seg, curAddr);
+    if (curAddr < (CW.data_size - 1)) then begin
+      exit;
+    end;
+    if CW.unit_color then begin
+      case CW.mode of
+        %00: begin
+          _fillColor4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+        %01: begin
+          _fillText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+        %10: begin
+          _fillColor16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+        else begin
+          _fillText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+      end;
+    end
+    else begin
+      case CW.mode of
+        %00: begin
+          _decodeGraph4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+        %01: begin
+          _decodeText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+        %10: begin
+          _decodeGraph16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+        else begin
+          _decodeText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
+        end;
+      end;
+    end;
+    Inc(curLin, CW.line_dotHei);
+  end;
+  Result := True;
+end;
+
+end.
 

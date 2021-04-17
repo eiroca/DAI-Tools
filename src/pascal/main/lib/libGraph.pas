@@ -12,10 +12,9 @@
 * If not, see <http://www.gnu.org/licenses/>.
 *
 *)
-unit libDAIGraph;
+unit libGraph;
 
 {$mode objfpc}{$H+}
-{$inline off}
 
 interface
 
@@ -36,18 +35,18 @@ const
 
   FONTCHAR_SIZE = 4 * 1024;
 
-var
-  //  Palette for 16 color gfx.
-  DAI_PALETTE: array[0..15] of TColor;
-  DAI_COLORREG: array[0..3] of byte;
-  FONT: array[0..FONTCHAR_SIZE - 1] of byte;
-
 const
   RES_HEIGHT: array[0..3] of integer = (260, 260, 260, 240);
   RES_WIDTH: array[0..3] of integer = (88, 176, 352, 528);
   RES_COLS: array[0..3] of integer = (11, 22, 44, 66);
   RES_PXL: array[0..3] of integer = (4, 2, 1, 1);
   RES_DOT: array[0..3] of integer = (12, 6, 3, 2);
+
+var
+  //  Palette for 16 color gfx.
+  DAI_PALETTE: array[0..15] of TColor;
+  DAI_COLORREG: array[0..3] of byte;
+  FONT: array[0..FONTCHAR_SIZE - 1] of byte;
 
 type
   ControlWord = record
@@ -68,6 +67,9 @@ type
     line_pxlWdt: integer;
   end;
 
+type
+  EMode = (mText, mGraph, mFill);
+
   RModeInfo = record
     min: integer;
     max: integer;
@@ -75,24 +77,19 @@ type
     col_16: boolean;
   end;
 
-  EMode = (mText, mGraph, mFill);
-
   RFrameBufferInfo = record
     stat: array [EMode] of RModeInfo;
     numCW: integer;
     sizeVis, sizeFull: integer;
   end;
 
+function DAI_initFont(const path: string): boolean;
 function DAI_infoFrameBuffer(var seg: RSegment; curAddr: integer; var fbi: RFrameBufferInfo): boolean;
-function DAI_decodeFullFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
-function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 
 implementation
 
-{$Include libDAIGraph_accurate.inc}
-{$Include libDAIGraph_fast.inc}
-
-function _decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
+function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 var
   b1, b2: byte;
 begin
@@ -159,7 +156,7 @@ begin
       if (curAddr < 1) then begin
         exit;
       end;
-      CW := _decodeControlWord(seg, curAddr);
+      CW := DAI_decodeControlWord(seg, curAddr);
       Inc(numCW);
       if (curAddr < (CW.data_size - 1)) then begin
         exit;
@@ -178,10 +175,8 @@ begin
           %10: begin
             col16 := False;
           end;
-          %11: begin
+          else begin // %11
             col16 := True;
-          end;
-          else begin
           end;
         end;
       end
@@ -202,12 +197,10 @@ begin
             v := CW.line_width;
             e := mGraph;
           end;
-          %11: begin
+          else begin // %11
             col16 := True;
             v := CW.line_colCnt;
             e := mText;
-          end;
-          else begin
           end;
         end;
       end;
@@ -242,125 +235,28 @@ begin
   Result := True;
 end;
 
-function DAI_decodeFullFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+function DAI_initFont(const path: string): boolean;
 var
-  curLin: integer;
-  CW: ControlWord;
-  rows: integer;
+  fs: TFileStream;
 begin
-  Result := False;
-  curLin := 0;
-  rows := DAI_IMAGE_LINES;
-  while (curLin < rows) do begin
-    if (curAddr < 1) then begin
-      exit;
-    end;
-    CW := _decodeControlWord(seg, curAddr);
-    if (curAddr < (CW.data_size - 1)) then begin
-      exit;
-    end;
-    if CW.unit_color then begin
-      case CW.mode of
-        %00: begin
-          _fillColor4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
-        end;
-        %01: begin
-          _fillText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
-        end;
-        %10: begin
-          _fillColor16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
-        end;
-        %11: begin
-          _fillText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
-        end;
-        else begin
-        end;
+  fs := TFileStream.Create(Path, fmOpenRead);
+  try
+    try
+      if (fs.Size <> FONTCHAR_SIZE) then begin
+        exit;
       end;
-    end
-    else begin
-      case CW.mode of
-        %00: begin
-          _decodeGraph4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
-        end;
-        %01: begin
-          _decodeText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
-        end;
-        %10: begin
-          _decodeGraph16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
-        end;
-        %11: begin
-          _decodeText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_dotWdt, CW.line_dotHei, C);
-        end;
-        else begin
-        end;
-      end;
+      fs.Read(FONT, FONTCHAR_SIZE);
+      Result := True;
+    except
+      Result := False;
     end;
-    Inc(curLin, CW.line_dotHei);
+  finally
+    fs.Free;
   end;
-  Result := True;
 end;
 
-function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
-var
-  curLin: integer;
-  CW: ControlWord;
-  rows: integer;
-  rescale: boolean;
+procedure InitColor();
 begin
-  Result := False;
-  curLin := 0;
-  rows := DAI_SCREEN_LINES;
-  while (curLin < rows) do begin
-    if (curAddr < 1) then begin
-      exit;
-    end;
-    CW := _decodeControlWord(seg, curAddr);
-    if (curAddr < (CW.data_size - 1)) then begin
-      exit;
-    end;
-    rescale := CW.line_width = 528;
-    if CW.unit_color then begin
-      case CW.mode of
-        %00: begin
-          _fastFillColor4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
-        end;
-        %01: begin
-          _fastFillText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
-        end;
-        %10: begin
-          _fastFillColor16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
-        end;
-        %11: begin
-          _fastFillText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
-        end;
-        else begin
-        end;
-      end;
-    end
-    else begin
-      case CW.mode of
-        %00: begin
-          _fastDecodeGraph4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
-        end;
-        %01: begin
-          _fastDecodeText4(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
-        end;
-        %10: begin
-          _fastDecodeGraph16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
-        end;
-        %11: begin
-          _fastDecodeText16(seg, curAddr, curLin, CW.line_colCnt, CW.line_pxlWdt, CW.line_pxlHei, rescale, C);
-        end;
-        else begin
-        end;
-      end;
-    end;
-    Inc(curLin, CW.line_pxlHei);
-  end;
-  Result := True;
-end;
-
-initialization
   DAI_PALETTE[$0] := RGBToColor($00, $00, $00); //  0 Black
   DAI_PALETTE[$1] := RGBToColor($00, $00, $8b); //  1 Dark Blue
   DAI_PALETTE[$2] := RGBToColor($b1, $00, $95); //  2 Purple Red
@@ -381,6 +277,14 @@ initialization
   DAI_COLORREG[1] := 0;
   DAI_COLORREG[2] := 0;
   DAI_COLORREG[3] := 0;
-  FillByte(FONT, sizeOf(FONT), 0);
-end.
+end;
 
+procedure InitFont();
+begin
+  FillByte(FONT, sizeOf(FONT), 0);
+end;
+
+initialization
+  InitColor();
+  InitFont();
+end.

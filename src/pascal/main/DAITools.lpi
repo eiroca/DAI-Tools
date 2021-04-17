@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="7">
+    <Units Count="8">
       <Unit0>
         <Filename Value="DAITools.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -44,25 +44,29 @@
         <ResourceBaseClass Value="Form"/>
       </Unit1>
       <Unit2>
-        <Filename Value="lib\libDAI.pas"/>
+        <Filename Value="lib\libTools.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit2>
       <Unit3>
-        <Filename Value="lib\libDAIGraph.pas"/>
+        <Filename Value="lib\libAudio.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit3>
       <Unit4>
-        <Filename Value="lib\libTools.pas"/>
+        <Filename Value="lib\libDAI.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit4>
       <Unit5>
-        <Filename Value="lib\libDAIGraph_accurate.inc"/>
+        <Filename Value="lib\libGraph.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit5>
       <Unit6>
-        <Filename Value="lib\libDAIGraph_fast.inc"/>
+        <Filename Value="lib\libGraphFast.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit6>
+      <Unit7>
+        <Filename Value="lib\libGraphFull.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit7>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -72,7 +76,7 @@
       <Filename Value="$Env(BUILD_PATH)DAI-Tools\DAITools"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir);lib"/>
+      <IncludeFiles Value="$(ProjOutDir)"/>
       <OtherUnitFiles Value="gui;lib"/>
       <UnitOutputDirectory Value="$Env(BUILD_PATH)DAI-Tools\lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>

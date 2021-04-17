@@ -19,15 +19,13 @@ unit libDAI;
 interface
 
 uses
-  libTools, libDAIGraph,
+  libTools,
   Classes, SysUtils, Graphics;
 
 type
   DAI_func = function(const outPath: string; var seg: RSegment): boolean;
 
 function DAI_lastError: string;
-
-function DAI_initFont(const path: string): boolean;
 
 function DAI_loadBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_loadSBin(const outPath: string; var seg: RSegment): boolean;
@@ -44,8 +42,16 @@ function DAI_saveWAV(const outPath: string; var seg: RSegment): boolean;
 
 implementation
 
+uses
+  libGraph, libGraphFast, libGraphFull, libAudio;
+
 threadvar
   lastError: string;
+
+function DAI_lastError: string;
+begin
+  Result := lastError;
+end;
 
 function _saveSegData(fs: TFileStream; var seg: RSegment): boolean;
 var
@@ -79,32 +85,6 @@ begin
         seg.Data[i] := fs.ReadByte();
       end;
       Result := True;
-    except
-      on E: Exception do lastError := 'Expception: ' + E.Message;
-    end;
-  finally
-    fs.Free;
-  end;
-end;
-
-function DAI_initFont(const path: string): boolean;
-var
-  fs: TFileStream;
-  i: integer;
-begin
-  Result := False;
-  lastError := 'Unable to read font ' + path;
-  fs := TFileStream.Create(Path, fmOpenRead);
-  try
-    try
-      if (fs.Size <> FONTCHAR_SIZE) then begin
-        exit;
-      end;
-      for i := 0 to FONTCHAR_SIZE - 1 do begin
-        FONT[i] := fs.ReadByte;
-      end;
-      Result := True;
-      lastError := '';
     except
       on E: Exception do lastError := 'Expception: ' + E.Message;
     end;
@@ -264,11 +244,6 @@ begin
   lastError := '';
 end;
 
-function DAI_lastError: string;
-begin
-  Result := lastError;
-end;
-
 function DAI_savePNG(const outPath: string; var seg: RSegment): boolean;
 var
   curAddr: integer;
@@ -286,9 +261,9 @@ begin
   if (curAddr = -1) then begin
     curAddr := seg.len - 1;
   end;
-  fbi.numCW:=0;
+  fbi.numCW := 0;
   DAI_infoFrameBuffer(seg, curAddr, fbi);
-  seg.entrypoint := curAddr - fbi.sizeVis+1;
+  seg.entrypoint := curAddr - fbi.sizeVis + 1;
   B := TPortableNetworkGraphic.Create;
   B.SetSize(DAI_SCREEN_WIDTH, DAI_SCREEN_LINES);
   C := B.Canvas;
@@ -326,9 +301,9 @@ begin
   if (curAddr = -1) then begin
     curAddr := seg.len - 1;
   end;
-  fbi.numCW:=0;
+  fbi.numCW := 0;
   DAI_infoFrameBuffer(seg, curAddr, fbi);
-  seg.entrypoint := curAddr - fbi.sizeVis+1;
+  seg.entrypoint := curAddr - fbi.sizeVis + 1;
   B := TPortableNetworkGraphic.Create;
   B.SetSize(DAI_IMAGE_WIDTH, DAI_IMAGE_LINES);
   C := B.Canvas;
@@ -437,17 +412,6 @@ begin
   end;
 end;
 
-procedure _writeSeg(fs: TFileStream; c: integer; b: array of byte);
-var
-  i, j: integer;
-begin
-  for i := 1 to c do begin
-    for j := low(b) to high(b) do begin
-      fs.WriteByte(b[j]);
-    end;
-  end;
-end;
-
 (* Write a BIT
  P (Pre-Leader): 1 x 00-80
  L (Leader): 7 x FF-7F / 7 x 00-80 / 7 x FF-7F / 7 x 00-80
@@ -455,186 +419,103 @@ end;
  0 (bit 0): 14 x FF-7F / 14 x 00-80 / 22 x FF-7F / 22 x 00-80
  T (Trailer): 10 x FF-7F / 10 x 00-80 / 14 x FF-7F / 14 x 00-80
 *)
-procedure _writeWAVbit(fs: TFileStream; type_bit: char; var fileSize: integer);
+procedure _writeSymbolP(var d: RAudio);
+begin
+  Audio_Append(d, False, 1);
+end;
+
+procedure _writeSymbolL(var d: RAudio);
 var
   nbre_a, nbre_b: integer;
 begin
-  nbre_a := 0;
-  nbre_b := 0;
-  if type_bit = '1' then begin
-    nbre_a := 11;
-    nbre_b := 7;
+  nbre_a := 13;
+  nbre_b := 13;
+  Audio_Append(d, True, nbre_a);
+  Audio_Append(d, False, nbre_a);
+  Audio_Append(d, True, nbre_b);
+  Audio_Append(d, False, nbre_b);
+end;
+
+procedure _writeSymbolT(var d: RAudio);
+var
+  nbre_a, nbre_b: integer;
+begin
+  nbre_a := 9;
+  nbre_b := 12;
+  Audio_Append(d, True, nbre_a);
+  Audio_Append(d, False, nbre_a);
+  Audio_Append(d, True, 12);
+  Audio_Append(d, False, 13);
+end;
+
+procedure _writeSymbol(var d: RAudio; b: boolean);
+var
+  nbre_a, nbre_b: integer;
+begin
+  if b then begin
+    nbre_a := 21;
+    nbre_b := 13;
   end
-  else if type_bit = '0' then begin
-    nbre_a := 7;
-    nbre_b := 11;
-  end
-  else if type_bit = 'L' then begin //L For the ladder
-    nbre_a := 7;
-    nbre_b := 7;
-  end
-  else if type_bit = 'T' then begin //T For the Trailer
-    nbre_a := 5;
-    nbre_b := 7;
+  else begin
+    nbre_a := 13;
+    nbre_b := 21;
   end;
-  if type_bit <> 'P' then begin
-    _writeSeg(fs, nbre_a, [255, 127]);
-    Inc(filesize, 2 * nbre_a);
-    _writeSeg(fs, nbre_a, [0, 128]);
-    Inc(filesize, 2 * nbre_a);
-    _writeSeg(fs, nbre_b, [255, 127]);
-    Inc(filesize, 2 * nbre_b);
-    _writeSeg(fs, nbre_b, [0, 128]);
-    Inc(filesize, 2 * nbre_b);
-  end
-  else begin // For the PreLeader
-    _writeSeg(fs, 1, [0, 128]);
-    Inc(filesize, 2);
-  end;
+  Audio_Append(d, True, nbre_a);
+  Audio_Append(d, False, nbre_a);
+  Audio_Append(d, True, nbre_b);
+  Audio_Append(d, False, nbre_b);
 end;
 
 // Decompose a Byte in Bits String and write them
-procedure _writeWAVbyte(fs: TFileStream; b: byte; var fileSize: integer);
+procedure _writeWAVbyte(var d: RAudio; b: byte);
 var
   i: integer;
+  m: integer;
 begin
+  m := $80;
   for i := 0 to 7 do begin
-    if b and (1 shl (7 - i)) <> 0 then begin
-      _writeWAVbit(fs, '1', fileSize);
-    end
-    else begin
-      _writeWAVbit(fs, '0', fileSize);
-    end;
+    _writeSymbol(d, (b and m) <> 0);
+    m := m shr 1;
   end;
 end;
-
-procedure _write4Char(fs: TFileStream; s: string);
-var
-  i: integer;
-begin
-  for i := 1 to 4 do begin
-    fs.WriteByte(Ord(s[i]));
-  end;
-end;
-
-procedure _writeInternal(fs: TFileStream; w: uint32; littleEnd: boolean; sz: integer); inline;
-var
-  b: array[0..3] of byte;
-  i: integer;
-begin
-  for i := 0 to sz - 1 do begin
-    b[i] := w and $FF;
-    w := w shr 8;
-  end;
-  if (littleEnd) then begin
-    for i := 0 to sz - 1 do begin
-      fs.WriteByte(b[i]);
-    end;
-  end
-  else begin
-    for i := sz - 1 downto 0 do begin
-      fs.WriteByte(b[i]);
-    end;
-  end;
-end;
-
-procedure _writeDWord(fs: TFileStream; w: uint32; littleEnd: boolean);
-begin
-  _writeInternal(fs, w, littleEnd, 4);
-end;
-
-procedure _writeWord(fs: TFileStream; w: uint32; littleEnd: boolean);
-begin
-  _writeInternal(fs, w, littleEnd, 2);
-end;
-
-const
-  HEADER_RIFF = 'RIFF';
-  HEADER_WAVE = 'WAVE';
-  HEADER_FMT = 'fmt ';
-  HEADER_DATA = 'data';
 
 function DAI_saveWAV(const outPath: string; var seg: RSegment): boolean;
 var
-  fs: TFileStream;
-  i, fileSize: integer;
-  temp: uint32;
+  i: integer;
+  d: RAudio;
 begin
   Result := False;
-  fs := TFileStream.Create(outPath, fmCreate);
   try
-    try
-      filesize := 0;
-      // Write the styandard WAV header
-      // RIFF marker
-      _write4Char(fs, HEADER_RIFF);
-      // file-size (equals file-size - 8) (4 bytes)
-      temp := 0;
-      _writeDWord(fs, temp, True);
-      // Mark it as type "WAVE"
-      _write4Char(fs, HEADER_WAVE);
-      // Mark the format section
-      _write4Char(fs, HEADER_FMT);
-      // Length of format data. Allways 16 (4 bytes)
-      temp := 16;
-      _writeDWord(fs, temp, True);
-      // Wave type PCM (2 bytes)
-      temp := 1;
-      _writeWord(fs, temp, True);
-      // 1 Channel (2 bytes)
-      temp := 1;
-      _writeWord(fs, temp, True);
-      // kHz Sample Rate (4 bytes)
-      temp := 8790;
-      _writeDWord(fs, temp, False);
-      // (Sample Rate * Bit Size * Channels) / 8 (4 bytes)
-      temp := 17580;
-      _writeDWord(fs, temp, False);
-      // (Bit Size * Channels) / 8 (2 bytes)
-      temp := 2;
-      _writeWord(fs, temp, True);
-      // Bits per sample (=Bit Size * Samples) (2 bytes)
-      temp := 16;
-      _writeWord(fs, temp, True);
-      // "data" marker
-      _write4Char(fs, HEADER_DATA);
-      // data-size (equals file-size - 44)
-      temp := 0;
-      _writeDWord(fs, temp, True);
-      // DAI tape pre-leader & leader
-      for i := 1 to 45 do begin
-        _writeWAVbit(fs, 'P', fileSize);
-      end;
-      for i := 1 to 1834 do begin
-        _writeWAVbit(fs, 'L', fileSize);
-      end;
-      _writeWAVbit(fs, '1', fileSize);
-      _writeWAVbyte(fs, 85, fileSize);
-      for i := 0 to seg.len - 1 do begin
-        _writeWAVbyte(fs, seg.Data[i], fileSize);
-      end;
-      // Write the DAI tape trailer
-      for i := 1 to 74 do begin
-        _writeWAVbit(fs, 'T', fileSize);
-      end;
-      _writeWAVbit(fs, '1', fileSize);
-      // Write the filesize int the WAV header
-      fs.Seek(4, soBeginning);
-      temp := filesize - 8;
-      _writeDWord(fs, temp, False);
-      fs.Seek(40, soBeginning);
-      temp := filesize - 44;
-      _writeDWord(fs, temp, False);
-      Result := True;
-      lastError := '';
-    except
-      on E: Exception do begin
-        lastError := 'Expception: ' + E.Message;
-        exit;
-      end;
+    d.len := 0;
+    Audio_Init(d);
+    // DAI tape
+    // pre-leader
+    for i := 1 to 89 do begin
+      _writeSymbolP(d);
     end;
-  finally
-    fs.Free;
+    // leader
+    for i := 1 to 1976 do begin
+      _writeSymbolL(d);
+    end;
+    _writeSymbol(d, True);
+    _writeWAVbyte(d, $55);
+    for i := 0 to seg.len - 1 do begin
+      _writeWAVbyte(d, seg.Data[i]);
+    end;
+    // Write the DAI tape trailer
+    for i := 1 to 74 do begin
+      _writeSymbolT(d);
+    end;
+    _writeSymbol(d, True);
+    Audio_Trunc(d);
+    Audio_Save(d, outPath);
+    Result := True;
+    lastError := '';
+  except
+    on E: Exception do begin
+      lastError := 'Expception: ' + E.Message;
+      exit;
+    end;
   end;
 end;
 
