@@ -30,6 +30,8 @@ function DAI_lastError: string;
 function DAI_loadBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_loadSBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_loadDump(const inPath: string; var seg: RSegment): boolean;
+function DAI_loadWAV(const inPath: string; var seg: RSegment): boolean;
+function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
 
 function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
@@ -40,7 +42,6 @@ function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveDAIbin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveWAV(const outPath: string; var seg: RSegment): boolean;
 
-function DAI_loadWAV(const inPath: string; var seg: RSegment): boolean;
 
 implementation
 
@@ -267,22 +268,26 @@ begin
   DAI_infoFrameBuffer(seg, curAddr, fbi);
   seg.entrypoint := curAddr - fbi.sizeVis + 1;
   B := TPortableNetworkGraphic.Create;
-  B.SetSize(DAI_SCREEN_WIDTH, DAI_SCREEN_LINES);
-  C := B.Canvas;
-  if DAI_decodeFrameBuffer(seg, curAddr, C) then begin
-    try
-      B.SaveToFile(outPath);
-      Result := True;
-      lastError := '';
-    except
-      on E: Exception do begin
-        lastError := 'Expception: ' + E.Message;
-        exit;
+  try
+    B.SetSize(DAI_SCREEN_WIDTH, DAI_SCREEN_LINES);
+    C := B.Canvas;
+    if DAI_decodeFrameBuffer(seg, curAddr, C) then begin
+      try
+        B.SaveToFile(outPath);
+        Result := True;
+        lastError := '';
+      except
+        on E: Exception do begin
+          lastError := 'Expception: ' + E.Message;
+          exit;
+        end;
       end;
+    end
+    else begin
+      lastError := 'Invalid Frame Buffer';
     end;
-  end
-  else begin
-    lastError := 'Invalid Frame Buffer';
+  finally
+    B.Free;
   end;
 end;
 
@@ -706,5 +711,36 @@ begin
     end;
   end;
 end;
+
+function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
+var
+  B: TPortableNetworkGraphic;
+  C: TCanvas;
+begin
+  Result := False;
+  lastError := 'Unable to read ' + inPath;
+  Segment_init(seg, $C000);
+  B := TPortableNetworkGraphic.Create;
+  try
+    B.LoadFromFile(inPath);
+    if (B.Width <> DAI_SCREEN_WIDTH) or (B.Height <> DAI_SCREEN_LINES) then begin
+      lastError := Format('Image must be (%d,%d)', [DAI_SCREEN_WIDTH, DAI_SCREEN_LINES]);
+      exit;
+    end;
+    C := B.Canvas;
+    if not DAI_createFrame(seg, C) then begin
+      lastError := 'Unable to crate FrameBuffer';
+      exit;
+    end;
+    Result := True;
+    lastError := '';
+  except
+    on E: Exception do begin
+      lastError := 'Expception: ' + E.Message;
+      exit;
+    end;
+  end;
+end;
+
 
 end.

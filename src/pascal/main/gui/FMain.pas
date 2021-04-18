@@ -84,8 +84,8 @@ uses
 {$R *.lfm}
 
 const
-  INPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'wav');
-  INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump, @DAI_loadWAV);
+  INPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'wav', 'png');
+  INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump, @DAI_loadWAV, @DAI_loadPNG);
   OUTPUT_TYPE: array of string = ('bin', 'sbin', 'dump', 'png (full)', 'png (fast)', 'DAI (bin)', 'wav');
   OUTPUT_EXTS: array of string = ('bin', 'sbin', 'dump', 'png', 'png', 'DAI', 'wav');
   OUTPUT_CALL: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_saveFullPNG, @DAI_savePNG, @DAI_saveDAIbin, @DAI_saveWAV);
@@ -148,6 +148,9 @@ begin
   outPath := getOutputPath(inPath, tOut);
   s.Name := ExtractFileName(outPath);
   s.size := 0;
+  if (outPath = inPath) then begin
+    outPath := outPath + '.' + tOut;
+  end;
   Result := loadFunc(inPath, s);
   if not Result then begin
     SetStatus(DAI_lastError());
