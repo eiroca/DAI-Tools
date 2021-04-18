@@ -37,14 +37,15 @@ type
 
   RSegment = record
     Name: string;
+    size: uint32;
     addr: uint16;
-    len: uint16;
     entrypoint: uint16;
     segType: uint16;
     Data: array of byte;
   end;
 
-procedure Segment_init(var seg: RSegment; const size: integer = (MAX_ADDR + 1));
+procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
+procedure Segment_resize(var seg: RSegment; const aSize: integer);
 procedure Segment_writeMetadata(var seg: RSegment; const path: string);
 
 function Dump_detect(const Lines: TStringList): EDumpType;
@@ -68,13 +69,21 @@ const
   N_TYPE: UnicodeString = '/Type';
   N_LENGTH: UnicodeString = '/Length';
 
-procedure Segment_init(var seg: RSegment; const size: integer);
+procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 begin
   with seg do begin
     addr := 0;
-    len := size;
+    size := aSize;
     entrypoint := 0;
     segType := 0;
+    SetLength(Data, size);
+  end;
+end;
+
+procedure Segment_resize(var seg: RSegment; const aSize: integer);
+begin
+  with seg do begin
+    size := aSize;
     SetLength(Data, size);
   end;
 end;
@@ -93,7 +102,7 @@ begin
   end;
   try
     conf.SetValue(aName + N_LOADADDR, seg.addr);
-    conf.SetValue(aName + N_LENGTH, seg.len);
+    conf.SetValue(aName + N_LENGTH, seg.size);
     conf.SetDeleteValue(aName + N_ENTRYPOINT, seg.entrypoint, 0);
     conf.SetDeleteValue(aName + N_TYPE, seg.segType, 0);
   finally
@@ -129,8 +138,8 @@ begin
       addr := _readBound(conf, aName + N_LOADADDR, addr, 0, MAX_ADDR);
       entrypoint := _readBound(conf, aName + N_ENTRYPOINT, entrypoint, 0, MAX_ADDR);
       segType := conf.GetValue(aName + N_TYPE, segType);
-      len := _readBound(conf, aName + N_LENGTH, seg.len, 0, MAX_ADDR + 1);
-      SetLength(seg.Data, seg.len);
+      size := _readBound(conf, aName + N_LENGTH, size, 0, MAX_ADDR + 1);
+      SetLength(Data, size);
     end;
   finally
     conf.Free;
@@ -270,13 +279,13 @@ begin
       end;
     end;
     seg.addr := minAddr;
-    seg.len := maxAddr - minAddr + 1;
-    seg.Data := Copy(seg.Data, seg.addr, seg.len);
+    seg.size := maxAddr - minAddr + 1;
+    seg.Data := Copy(seg.Data, seg.addr, seg.size);
     Result := False;
   except
     on E: EConvertError do begin
       SetLength(seg.Data, 0);
-      seg.len := 0;
+      seg.size := 0;
     end;
   end;
 end;

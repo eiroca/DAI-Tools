@@ -66,8 +66,8 @@ begin
       end;
       colIdx := (((data1 shr (7 - k)) and $01) shl 1) or ((data2 shr (7 - k)) and $01);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
-        C.Pixels[posX, posY] := col;
-        Inc(posX);
+      C.Pixels[posX, posY] := col;
+      Inc(posX);
     end;
     Inc(posY);
   end;
@@ -114,8 +114,8 @@ begin
     for k := 2 to 7 do begin
       colIdx := ((charData shr k) and $01) or (((data2 shr k) and $01) shl 1);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
-        C.Pixels[posX, posY] := col;
-        Inc(posX);
+      C.Pixels[posX, posY] := col;
+      Inc(posX);
     end;
     Inc(posY);
   end;
@@ -176,8 +176,8 @@ begin
         colIdx := c1;
       end;
       col := DAI_PALETTE[colIdx];
-        C.Pixels[posX, posY] := col;
-        Inc(posX);
+      C.Pixels[posX, posY] := col;
+      Inc(posX);
     end;
     Inc(posY);
   end;
@@ -186,7 +186,7 @@ end;
 
 procedure _fastDrawBlockText16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
 var
-  j, k,s: integer;
+  j, k, s: integer;
   col: TColor;
   charData, colIdx: integer;
   posX, posY, posC: integer;
@@ -245,8 +245,8 @@ begin
         colIdx := c1;
       end;
       col := DAI_PALETTE[colIdx];
-        C.Pixels[posX, posY] := col;
-        Inc(posX);
+      C.Pixels[posX, posY] := col;
+      Inc(posX);
     end;
     Inc(posY);
   end;

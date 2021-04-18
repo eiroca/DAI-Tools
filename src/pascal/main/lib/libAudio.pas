@@ -19,7 +19,7 @@ unit libAudio;
 interface
 
 uses
-  Classes;
+  Classes, bufstream;
 
 type
   FCS = array[1..4] of char;
@@ -56,7 +56,7 @@ type
   end;
 
 const
-  BIT2SAMPLE: array[boolean] of int16 = (-32768, 32767);
+  BIT2SAMPLE: array[boolean] of word = ($8000, $7FFF);
 
 type
   RAudio = record
@@ -71,6 +71,7 @@ procedure Audio_Trunc(var w: RAudio);
 procedure Audio_Grow(var w: RAudio; s: integer);
 procedure Audio_Append(var w: RAudio; v: boolean; d: integer);
 function Audio_Save(var w: RAudio; const outPath: string): boolean;
+function Audio_Load(const inPath: string; var w: RAudio): boolean;
 
 implementation
 
@@ -132,14 +133,14 @@ end;
 
 function Audio_Save(var w: RAudio; const outPath: string): boolean;
 var
-  fs: TFileStream;
+  fs: TBufferedFileStream;
   i, j: integer;
   hdr: RRIFFHeader;
   fmt: RWAVEfmt;
   dat: RWAVEdata;
 begin
   Result := False;
-  fs := TFileStream.Create(outPath, fmCreate);
+  fs := TBufferedFileStream.Create(outPath, fmCreate);
   try
     hdr.RIFF := HEADER_RIFF;
     hdr.size := 12 + 24 + 8 + w.durTot * 2;
@@ -165,6 +166,82 @@ begin
       end;
     end;
     Result := True;
+  finally
+    fs.Free;
+  end;
+end;
+
+function Audio_Load(const inPath: string; var w: RAudio): boolean;
+var
+  fs: TBufferedFileStream;
+  i: integer;
+  hdr: RRIFFHeader;
+  fmt: RWAVEfmt;
+  dat: RWAVEdata;
+  cnt: integer;
+  v: int16;
+begin
+  Result := False;
+  Audio_Init(w);
+  hdr.size := 0;
+  fmt.size := 0;
+  dat.size := 0;
+  fs := TBufferedFileStream.Create(inPath, fmOpenRead);
+  try
+    while True do begin
+      if (fs.Size < 44) then begin
+        break;
+      end;
+      if fs.Read(hdr, SizeOf(hdr)) <> SizeOf(hdr) then begin
+        break;
+      end;
+      if fs.Read(fmt, SizeOf(fmt)) <> SizeOf(fmt) then begin
+        break;
+      end;
+      if fs.Read(dat, SizeOf(dat)) <> SizeOf(dat) then begin
+        break;
+      end;
+      if (hdr.RIFF <> HEADER_RIFF) then begin
+        break;
+      end;
+      if (hdr.WAVE <> HEADER_WAVE) then begin
+        break;
+      end;
+      if fmt.Name <> HEADER_FRMT then begin
+        break;
+      end;
+      if fmt.size <> 16 then begin
+        break;
+      end;
+      if fmt.wFormatTag <> WAVE_PCM then begin
+        break;
+      end;
+      if fmt.nChannels <> 1 then begin
+        break;
+      end;
+      if fmt.nSamplesPerSec <> 44100 then begin
+        break;
+      end;
+      if fmt.nAvgBytesPerSec <> 44100 * 2 * 1 then begin
+        break;
+      end;
+      if fmt.nBlockAlign <> 2 then begin
+        break;
+      end;
+      if fmt.wBitsPerSample <> 16 then begin
+        break;
+      end;
+      if dat.Name <> HEADER_DATA then begin
+        break;
+      end;
+      cnt := dat.size div 2;
+      for i := 0 to cnt - 1 do begin
+        v := int16(fs.ReadWord());
+        Audio_Append(w, (v >= 0), 1);
+      end;
+      Result := True;
+      break;
+    end;
   finally
     fs.Free;
   end;
