@@ -173,6 +173,7 @@ begin
   iInputFile.Caption := '';
   iOutputFile.Caption := '';
   PageControl1.ActivePageIndex := 0;
+  tsArchive.Free;
 end;
 
 procedure TfmMain.FormActivate(Sender: TObject);

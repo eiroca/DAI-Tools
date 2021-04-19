@@ -111,9 +111,9 @@ object fmMain: TfmMain
     Height = 513
     Top = 0
     Width = 765
-    ActivePage = tsWorking
+    ActivePage = tsArchive
     Align = alClient
-    TabIndex = 0
+    TabIndex = 1
     TabOrder = 2
     object tsWorking: TTabSheet
       Caption = 'Working Area'
@@ -151,11 +151,11 @@ object fmMain: TfmMain
     end
     object tsArchive: TTabSheet
       Caption = 'Archive'
-      ClientHeight = 524
-      ClientWidth = 1071
+      ClientHeight = 485
+      ClientWidth = 757
       object tvDAI: TShellTreeView
         Left = 0
-        Height = 524
+        Height = 485
         Top = 0
         Width = 250
         Align = alLeft
@@ -166,15 +166,15 @@ object fmMain: TfmMain
       end
       object Splitter1: TSplitter
         Left = 250
-        Height = 524
+        Height = 485
         Top = 0
         Width = 5
       end
       object lvArchive: TShellListView
         Left = 255
-        Height = 524
+        Height = 485
         Top = 0
-        Width = 816
+        Width = 502
         Align = alClient
         Color = clDefault
         TabOrder = 2

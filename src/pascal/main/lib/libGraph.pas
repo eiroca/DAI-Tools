@@ -306,6 +306,7 @@ var
   dR, dG, dB: integer;
   minErr: integer;
 begin
+  Result := 0;
   minErr := MaxInt;
   RedGreenBlue(col, R1, G1, B1);
   for i := low(pal) to High(pal) do begin
@@ -342,7 +343,7 @@ begin
   posX := 0;
   blkCol[0] := 0;
   addr := $BFFF;
-  for y := 50 to DAI_SCREEN_LINES - 1 do begin
+  for y := 0 to DAI_SCREEN_LINES - 1 do begin
     posX := 0;
     CW := DAI_encodeControlWord(2, 2, 0, False, False, 0, 0);
     seg.Data[addr] := (CW shr 8) and $FF;
