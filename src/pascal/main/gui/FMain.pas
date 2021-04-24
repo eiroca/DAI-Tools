@@ -84,11 +84,11 @@ uses
 {$R *.lfm}
 
 const
-  INPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'wav', 'png');
-  INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump, @DAI_loadWAV, @DAI_loadPNG);
-  OUTPUT_TYPE: array of string = ('bin', 'sbin', 'dump', 'png (full)', 'png (fast)', 'DAI (bin)', 'wav');
+  INPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'dai', 'wav', 'png');
+  INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump, @DAI_loadDAI, @DAI_loadWAV, @DAI_loadPNG);
+  OUTPUT_TYPE: array of string = ('bin', 'sbin', 'dump', 'png (full)', 'png (fast)', 'DAI (bin)', 'DAI (bas)', 'wav');
   OUTPUT_EXTS: array of string = ('bin', 'sbin', 'dump', 'png', 'png', 'DAI', 'wav');
-  OUTPUT_CALL: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_saveFullPNG, @DAI_savePNG, @DAI_saveDAIbin, @DAI_saveWAV);
+  OUTPUT_CALL: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_saveFullPNG, @DAI_savePNG, @DAI_saveDAIbin, @DAI_saveDAIbas, @DAI_saveWAV);
 
   FONT_PATHNAME: array of string = ('DAI\ROMS\nch.bin', 'DAI\nch.bin', 'nch.bin');
 

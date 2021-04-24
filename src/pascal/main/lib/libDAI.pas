@@ -27,21 +27,21 @@ type
 
 function DAI_lastError: string;
 
-function DAI_loadBin(const outPath: string; var seg: RSegment): boolean;
-function DAI_loadSBin(const outPath: string; var seg: RSegment): boolean;
+function DAI_loadBin(const inPath: string; var seg: RSegment): boolean;
+function DAI_loadSBin(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadDump(const inPath: string; var seg: RSegment): boolean;
+function DAI_loadDAI(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadWAV(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
 
 function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
+function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
 function DAI_savePNG(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveFullPNG(const outPath: string; var seg: RSegment): boolean;
-function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
-
 function DAI_saveDAIbin(const outPath: string; var seg: RSegment): boolean;
+function DAI_saveDAIbas(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveWAV(const outPath: string; var seg: RSegment): boolean;
-
 
 implementation
 
@@ -206,14 +206,14 @@ begin
   end;
 end;
 
-function DAI_loadBin(const outPath: string; var seg: RSegment): boolean;
+function DAI_loadDAI(const inPath: string; var seg: RSegment): boolean;
 var
   fs: TBufferedFileStream;
   sz: integer;
 begin
   Result := False;
-  lastError := 'Unable to read ' + outPath;
-  fs := TBufferedFileStream.Create(outPath, fmOpenRead);
+  lastError := 'Unable to read ' + inPath;
+  fs := TBufferedFileStream.Create(inPath, fmOpenRead);
   sz := fs.Size;
   if not _loadSegData(fs, sz, seg) then begin
     exit;
@@ -222,14 +222,30 @@ begin
   lastError := '';
 end;
 
-function DAI_loadSBin(const outPath: string; var seg: RSegment): boolean;
+function DAI_loadBin(const inPath: string; var seg: RSegment): boolean;
 var
   fs: TBufferedFileStream;
   sz: integer;
 begin
   Result := False;
-  lastError := 'Unable to read ' + outPath;
-  fs := TBufferedFileStream.Create(outPath, fmOpenRead);
+  lastError := 'Unable to read ' + inPath;
+  fs := TBufferedFileStream.Create(inPath, fmOpenRead);
+  sz := fs.Size;
+  if not _loadSegData(fs, sz, seg) then begin
+    exit;
+  end;
+  Result := True;
+  lastError := '';
+end;
+
+function DAI_loadSBin(const inPath: string; var seg: RSegment): boolean;
+var
+  fs: TBufferedFileStream;
+  sz: integer;
+begin
+  Result := False;
+  lastError := 'Unable to read ' + inPath;
+  fs := TBufferedFileStream.Create(inPath, fmOpenRead);
   try
     sz := fs.Size - 2;
     seg.addr := fs.ReadWord;
@@ -345,13 +361,26 @@ begin
   Result := cs;
 end;
 
+procedure _writeByte(fs: TBufferedFileStream; const b: byte; var cs: integer); inline;
+begin
+  fs.writeByte(b);
+  cs := Checksum(cs, b);
+end;
+
+procedure _writeString(fs: TBufferedFileStream; const s: string; var cs: integer); inline;
+var
+  car: char;
+begin
+  for car in s do begin
+    _writeByte(fs, Ord(car), cs);
+  end;
+end;
+
 function DAI_saveDAIbin(const outPath: string; var seg: RSegment): boolean;
 var
-  FNLength: integer;
   fs: TBufferedFileStream;
-  c, cs: integer;
+  cs: integer;
   b: byte;
-  car: char;
   addrL, addrH: integer;
   sizeL, sizeH: integer;
 begin
@@ -362,50 +391,40 @@ begin
       // File Type = 49 (31H for Binary file to load in UT with "R" command)
       fs.WriteByte($31);
       // Name Length
-      FNLength := Length(seg.Name);
       cs := 86;
-      fs.writeByte(0);
-      cs := Checksum(cs, 0);
-      fs.writeByte(FNLength);
-      cs := Checksum(cs, FNLength);
+      _writeByte(fs, 0, cs);
+      _writeByte(fs, Length(seg.Name), cs);
       fs.writeByte(cs);
       // Name
       cs := 86;
-      for car in seg.Name do begin
-        c := Ord(car);
-        fs.writeByte(c);
-        cs := Checksum(cs, c);
-      end;
+      _writeString(fs, seg.Name, cs);
       fs.writeByte(cs);
       // Length of Address
-      fs.writeByte(0);
-      fs.writeByte(2);
-      fs.writeByte(93);
-      // Start Address
       cs := 86;
+      _writeByte(fs, 0, cs);
+      _writeByte(fs, 2, cs);
+      fs.writeByte(cs);
+      // Start Address
       addrL := seg.addr and $FF;
       addrH := (seg.addr shr 8) and $FF;
-      fs.writeByte(addrL);
-      cs := Checksum(cs, addrL);
-      fs.writeByte(addrH);
-      cs := Checksum(cs, addrH);
+      cs := 86;
+      _writeByte(fs, addrL, cs);
+      _writeByte(fs, addrH, cs);
       fs.writeByte(cs);
       // Length of Content
       sizeL := seg.size and 255;
       sizeH := (seg.size shr 8) and 255;
       cs := 86;
-      fs.writeByte(sizeH);
-      cs := Checksum(cs, sizeH);
-      fs.writeByte(sizeL);
-      cs := Checksum(cs, sizeL);
+      _writeByte(fs, sizeH, cs);
+      _writeByte(fs, sizeL, cs);
       fs.writeByte(cs);
       // Content
       cs := 86;
       for b in seg.Data do begin
-        fs.writeByte(b);
-        cs := Checksum(cs, b);
+        _writeByte(fs, b, cs);
       end;
       fs.writeByte(cs);
+      //
       Result := True;
       lastError := '';
     except
@@ -418,6 +437,65 @@ begin
     fs.Free;
   end;
 end;
+
+function DAI_saveDAIbas(const outPath: string; var seg: RSegment): boolean;
+var
+  fs: TBufferedFileStream;
+  cs: integer;
+  b: byte;
+  sizeL, sizeH: integer;
+begin
+  Result := False;
+  fs := TBufferedFileStream.Create(outPath, fmCreate);
+  try
+    try
+      // File Type = 30H for Basic
+      fs.WriteByte($30);
+      // Name Length
+      cs := 86;
+      _writeByte(fs, 0, cs);
+      _writeByte(fs, Length(seg.Name), cs);
+      fs.writeByte(cs);
+      // Name
+      cs := 86;
+      _writeString(fs, seg.Name, cs);
+      fs.writeByte(cs);
+      // Program Block
+      sizeL := seg.size and 255;
+      sizeH := (seg.size shr 8) and 255;
+      cs := 86;
+      _writeByte(fs, sizeH, cs);
+      _writeByte(fs, sizeL, cs);
+      fs.writeByte(cs);
+      cs := 86;
+      for b in seg.Data do begin
+        _writeByte(fs, b, cs);
+      end;
+      fs.writeByte(cs);
+      // Simbol Block
+      sizeL := 1;
+      sizeH := 0;
+      cs := 86;
+      _writeByte(fs, sizeH, cs);
+      _writeByte(fs, sizeL, cs);
+      fs.writeByte(cs);
+      cs := 86;
+      _writeByte(fs, 0, cs);
+      fs.writeByte(cs);
+      //
+      Result := True;
+      lastError := '';
+    except
+      on E: Exception do begin
+        lastError := 'Expception: ' + E.Message;
+        exit;
+      end;
+    end;
+  finally
+    fs.Free;
+  end;
+end;
+
 
 (* Write a BIT
  P (Pre-Leader): 1 x 00-80
