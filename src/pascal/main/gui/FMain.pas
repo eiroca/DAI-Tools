@@ -79,18 +79,9 @@ var
 implementation
 
 uses
-  libTools, libDAI, libGraph;
+  uFilters, libTools, libDAI, libGraph;
 
 {$R *.lfm}
-
-const
-  INPUT_TYPES: array of string = ('bin', 'sbin', 'dump', 'dai', 'wav', 'png');
-  INPUT_CALLS: array of DAI_func = (@DAI_loadBin, @DAI_loadSBin, @DAI_loadDump, @DAI_loadDAI, @DAI_loadWAV, @DAI_loadPNG);
-  OUTPUT_TYPE: array of string = ('bin', 'sbin', 'dump', 'png (full)', 'png (fast)', 'DAI (bin)', 'DAI (bas)', 'wav');
-  OUTPUT_EXTS: array of string = ('bin', 'sbin', 'dump', 'png', 'png', 'DAI', 'DAI', 'wav');
-  OUTPUT_CALL: array of DAI_func = (@DAI_saveBin, @DAI_saveSBin, @DAI_saveDump, @DAI_saveFullPNG, @DAI_savePNG, @DAI_saveDAIbin, @DAI_saveDAIbas, @DAI_saveWAV);
-
-  FONT_PATHNAME: array of string = ('DAI\ROMS\nch.bin', 'DAI\nch.bin', 'nch.bin');
 
 { TfmMain }
 
@@ -125,6 +116,7 @@ var
   loadFunc, saveFunc: DAI_func;
   s: RSegment;
   Result: boolean;
+  inFilter, outFilter: PFilter;
 begin
   inPath := iInputFile.FileName;
   if (inPath = '') then begin
@@ -138,9 +130,11 @@ begin
     SetStatus(Format('Invalid Conversion', [fName, tIn, tOut]));
     exit;
   end;
-  loadFunc := INPUT_CALLS[cbInput.ItemIndex];
-  saveFunc := OUTPUT_CALL[cbOutput.ItemIndex];
-  tOut := OUTPUT_EXTS[cbOutput.ItemIndex];
+  inFilter:= FindLoadFilter(cbInput.ItemIndex);
+  outFilter:= FindSaveFilter(cbOutput.ItemIndex);
+  loadFunc := inFilter^.proc;
+  saveFunc :=       outFilter^.proc;
+  tOut := outFilter^.ext;
   if (loadFunc = nil) or (saveFunc = nil) then begin
     SetStatus(Format('Conversion from %s to %s is not supported yet!', [tIn, tOut]));
     exit;
@@ -191,7 +185,7 @@ begin
   ext := ExtractFileExt(PathName);
   if (length(ext) > 1) then begin
     ext := LowerCase(Copy(ext, 2, Length(ext) - 1));
-    ps := cbInput.Items.IndexOf(ext);
+    ps := IndexOfLoadFilter(ext);
     if (ps >= 0) then begin
       cbInput.ItemIndex := ps;
     end;
@@ -248,10 +242,10 @@ end;
 procedure TfmMain.InitCombo();
 begin
   cbInput.Items.Clear;
-  cbInput.Items.AddStrings(INPUT_TYPES);
+  ListLoadFilters(cbInput.Items);
   cbInput.ItemIndex := 0;
   cbOutput.Items.Clear;
-  cbOutput.Items.AddStrings(OUTPUT_TYPE);
+  ListSaveFilters(cbOutput.Items);
   cbOutput.ItemIndex := 0;
 end;
 
