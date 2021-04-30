@@ -33,6 +33,7 @@ function DAI_loadDump(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadDAI(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadWAV(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
+function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
 
 function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
@@ -144,7 +145,7 @@ begin
   Result := True;
   Lines := TStringList.Create;
   try
-    Segment_text(seg, Lines, '>D%.4x %.4x', '%.4x', '%.2x', ' ');
+    Segment_text(seg, Lines, '>D%.4x %.4x', '%.4x ', '%.2x', ' ');
     if (seg.entrypoint <> 0) then begin
       Lines.Insert(1, Format('>Run Address = %4x', [seg.entrypoint]));
     end;
@@ -794,6 +795,40 @@ begin
       end;
       C := B.Canvas;
       if not DAI_createFrame(seg, C) then begin
+        lastError := 'Unable to crate FrameBuffer';
+        exit;
+      end;
+      Result := True;
+      lastError := '';
+    except
+      on E: Exception do begin
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
+        exit;
+      end;
+    end;
+  finally
+    B.Free;
+  end;
+end;
+
+function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
+var
+  B: TPortableNetworkGraphic;
+  C: TCanvas;
+begin
+  Result := False;
+  lastError := 'Unable to read ' + inPath;
+  Segment_init(seg, $C000);
+  B := TPortableNetworkGraphic.Create;
+  try
+    try
+      B.LoadFromFile(inPath);
+      if (B.Width <> DAI_SCREEN_WIDTH) or (B.Height <> DAI_SCREEN_LINES) then begin
+        lastError := Format('Image must be (%d,%d)', [DAI_SCREEN_WIDTH, DAI_SCREEN_LINES]);
+        exit;
+      end;
+      C := B.Canvas;
+      if not DAI_createFrameOpt(seg, C) then begin
         lastError := 'Unable to crate FrameBuffer';
         exit;
       end;

@@ -28,3 +28,35 @@ The status of the conversion will be displayed in the bottom of the window.
 
 
 ![DAI 1](DAI_1.png "DAI 1") ![DAI 2](DAI_2.png "DAI 2")
+
+
+## Command Line Version (CLI)
+
+```
+Usage:
+  HELP -> DTcli.exe -h
+  CONVERT -> DTcli.exe inputfile --convert-to save_type [--input-type load_type] [--output outputfile]
+
+-o --output (if missing is input file with extension changed)
+
+-t --input-file (if missing is input file extension)
+  bin -> BIN
+  sbin -> SBIN
+  dump -> dump
+  dai -> DAI
+  wav -> WAV
+  png -> PNG
+  png -> PNG_(big)
+
+-c --convert-to
+  BIN -> bin
+  SBIN -> sbin
+  dump -> dump
+  asm -> asm
+  PNG_(full) -> png
+  PNG_(fast) -> png
+  HRFB -> hrfb
+  DAI_(bin) -> dai
+  DAI_(basic) -> dai
+  WAV -> wav
+```

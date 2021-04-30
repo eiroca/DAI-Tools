@@ -42,7 +42,7 @@ type
     inType := -1;
     outType := -1;
     // parse parameters
-    ErrorMsg := CheckOptions('hc:o:t:', ['help', 'convert:', 'output:', 'input-type:'], opts, paths);
+    ErrorMsg := CheckOptions('hc:o:t:', ['help', 'convert-to:', 'output:', 'input-type:'], opts, paths);
     if ErrorMsg <> '' then begin
       writeln(ErrorMsg);
       Terminate;
@@ -71,7 +71,7 @@ type
     outType := IndexOfSaveFilter(outTyp);
     inType := IndexOfLoadFilter(inTyp);
     if (inPath = '') or (outType < 0) or (inType < 0) then begin
-      writeln('Invalid combination of parameters');
+      writeln('Invalid combination of parameters, use -h for help');
       Terminate;
       Exit;
     end;
@@ -111,9 +111,25 @@ type
   end;
 
   procedure TDAIToolCLI.WriteHelp;
+  var
+    i: integer;
   begin
     { add your help code here }
-    writeln('Usage: ', ExtractFileName(ExeName), ' -h');
+    writeln('Usage:');
+    writeln('  HELP -> ', ExtractFileName(ExeName), ' -h');
+    writeln('  CONVERT -> ', ExtractFileName(ExeName), ' inputfile --convert-to save_type [--input-type load_type] [--output outputfile]');
+    writeln();
+    writeln('-o --output (if missing is input file with extension changed)');
+    writeln();
+    writeln('-t --input-file (if missing is input file extension)');
+    for i := low(LOAD_FILTERS) to high(LOAD_FILTERS) do begin
+      writeln('  ', LOAD_FILTERS[i].ext, ' -> ', StringReplace(LOAD_FILTERS[i].displayName, ' ', '_', [rfReplaceAll]));
+    end;
+    writeln();
+    writeln('-c --convert-to');
+    for i := low(SAVE_FILTERS) to high(SAVE_FILTERS) do begin
+      writeln('  ', StringReplace(SAVE_FILTERS[i].displayName, ' ', '_', [rfReplaceAll]), ' -> ', SAVE_FILTERS[i].ext);
+    end;
   end;
 
 var
@@ -124,4 +140,3 @@ begin
   Application.Run;
   Application.Free;
 end.
-

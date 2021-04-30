@@ -87,6 +87,7 @@ function DAI_initFont(const path: string): boolean;
 function DAI_infoFrameBuffer(var seg: RSegment; curAddr: integer; var fbi: RFrameBufferInfo): boolean;
 function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 function DAI_createFrame(var seg: RSegment; const C: TCanvas): boolean;
+function DAI_createFrameOpt(var seg: RSegment; const C: TCanvas): boolean;
 function DAI_FrameBufferToText(var seg: RSegment; curAddr: integer; L: TStringList): boolean;
 
 implementation
@@ -292,9 +293,12 @@ begin
       end;
     end;
     n := newn;
-  until (n = 0);
+  until (n < 14); //(n = 0);
   C1 := idx[15];
   C2 := idx[14];
+  if (freq[c2] = 0) then begin // 1 color only
+    c2 := c1;
+  end;
 end;
 
 function _findBestColor(const col: TColor; const pal: array of TColor): integer;
@@ -309,7 +313,7 @@ begin
   Result := 0;
   minErr := MaxInt;
   RedGreenBlue(col, R1, G1, B1);
-  for i := low(pal) to High(pal) do begin
+  for i := high(pal) downto low(pal) do begin
     daiCol := pal[i];
     RedGreenBlue(daiCol, R2, G2, B2);
     dR := (R1 - R2);
@@ -332,12 +336,13 @@ var
   posX, PosY: integer;
   blkCol: RColFreq;
   col: TColor;
-  C1, C2, c16: integer;
+  tC, C1, C2, c16: integer;
   pal: array[0..1] of TColor;
   CW: word;
   addr: integer;
   v, m: integer;
 begin
+  Segment_resize(seg, $C000);
   Result := False;
   posY := 0;
   posX := 0;
@@ -359,8 +364,13 @@ begin
         Inc(posX);
       end;
       _findColorPair(blkCol, C1, C2);
-      pal[0] := DAI_PALETTE[c1];
-      pal[1] := DAI_PALETTE[c2];
+      if (C1 > C2) then begin
+        tC := C1;
+        C1 := C2;
+        C2 := tC;
+      end;
+      pal[0] := DAI_PALETTE[C1];
+      pal[1] := DAI_PALETTE[C2];
       v := 0;
       m := $80;
       Dec(posX, 8);
@@ -379,6 +389,131 @@ begin
     end;
     Inc(posY);
   end;
+  // Append some data for invisible line 3 black bar of 96 scan lines
+  for y := 1 to 3 do begin
+    seg.Data[addr] := $8F;
+    Dec(addr);
+    seg.Data[addr] := $00;
+    Dec(addr);
+    seg.Data[addr] := $00;
+    Dec(addr);
+    seg.Data[addr] := $00;
+    Dec(addr);
+  end;
+  Segment_slice(seg, addr + 1, $BFFF);
+  Result := True;
+end;
+
+function _analizeRow(const C: TCanvas; y: integer; out blkCol: RColFreq; out cl: integer): integer;
+var
+  x: integer;
+  col: TColor;
+  c16: integer;
+  cnt: integer;
+begin
+  FillByte(blkCol, SizeOf(blkCol), 0);
+  for x := 0 to DAI_SCREEN_WIDTH - 1 do begin
+    col := C.Pixels[x, y];
+    c16 := _findBestColor(col, DAI_PALETTE);
+    Inc(blkCol[c16]);
+  end;
+  cnt := 0;
+  for x := 0 to 15 do begin
+    if (blkCol[x] > 0) then begin
+      cl := x;
+      Inc(cnt);
+    end;
+  end;
+  Result := cnt;
+end;
+
+function DAI_createFrameOpt(var seg: RSegment; const C: TCanvas): boolean;
+var
+  xc, x, y: integer;
+  posX, PosY: integer;
+  blkCol: RColFreq;
+  col: TColor;
+  tC, C1, C2, c16: integer;
+  pal: array[0..1] of TColor;
+  CW: word;
+  addr: integer;
+  v, m: integer;
+  colCount: integer;
+begin
+  Segment_resize(seg, $C000);
+  Result := False;
+  posY := 0;
+  posX := 0;
+  blkCol[0] := 0;
+  addr := $BFFF;
+  blkCol[0] := 0;
+  for y := 0 to DAI_SCREEN_LINES - 1 do begin
+    colCount := _analizeRow(C, y, blkCol, c16);
+    if (colCount = 1) then begin
+      CW := DAI_encodeControlWord(2, 2, 0, False, True, 0, 0);
+      seg.Data[addr] := (CW shr 8) and $FF;
+      Dec(addr);
+      seg.Data[addr] := CW and $FF;
+      Dec(addr);
+      seg.Data[addr] := c16 shl 4 + c16;
+      Dec(addr);
+      seg.Data[addr] := 0;
+      Dec(addr);
+    end
+    else begin
+      posX := 0;
+      CW := DAI_encodeControlWord(2, 2, 0, False, False, 0, 0);
+      seg.Data[addr] := (CW shr 8) and $FF;
+      Dec(addr);
+      seg.Data[addr] := CW and $FF;
+      Dec(addr);
+      for xc := 0 to 44 - 1 do begin
+        FillByte(blkCol, SizeOf(blkCol), 0);
+        for x := 0 to 7 do begin
+          col := C.Pixels[posX, PosY];
+          c16 := _findBestColor(col, DAI_PALETTE);
+          Inc(blkCol[c16]);
+          Inc(posX);
+        end;
+        _findColorPair(blkCol, C1, C2);
+        if (C1 > C2) then begin
+          tC := C1;
+          C1 := C2;
+          C2 := tC;
+        end;
+        pal[0] := DAI_PALETTE[C1];
+        pal[1] := DAI_PALETTE[C2];
+        v := 0;
+        m := $80;
+        Dec(posX, 8);
+        for x := 0 to 7 do begin
+          col := C.Pixels[posX, PosY];
+          if _findBestColor(col, pal) = 0 then begin
+            v := v or m;
+          end;
+          m := m shr 1;
+          Inc(posX);
+        end;
+        seg.Data[addr] := v;
+        Dec(addr);
+        seg.Data[addr] := C1 shl 4 + C2;
+        Dec(addr);
+      end;
+    end;
+    Inc(posY);
+  end;
+  // Append some data for invisible line 3 black bar of 96 scan lines
+  for y := 1 to 3 do begin
+    seg.Data[addr] := $8F;
+    Dec(addr);
+    seg.Data[addr] := $00;
+    Dec(addr);
+    seg.Data[addr] := $00;
+    Dec(addr);
+    seg.Data[addr] := $00;
+    Dec(addr);
+  end;
+  Segment_slice(seg, addr + 1, $BFFF);
   Result := True;
 end;
 
@@ -444,7 +579,7 @@ begin
         end;
       end;
     end;
-    s := s + Format(' %dx%x %s %s', [CW.line_width, CW.line_pxlHei, md, cl]);
+    s := s + Format(' %dx%d %s %s', [CW.line_width, CW.line_pxlHei, md, cl]);
     if (CW.enable_change) then begin
       s := s + Format(' [%x]=%x', [CW.color_reg, CW.color_sel]);
     end;

@@ -43,11 +43,11 @@ function IndexOfSaveFilter(const Name: string): integer;
 procedure ListLoadFilters(const S: TStrings);
 procedure ListSaveFilters(const S: TStrings);
 
-implementation
-
 var
   LOAD_FILTERS: array of RFilter;
   SAVE_FILTERS: array of RFilter;
+
+implementation
 
 function NewFilter(ext: string; displayName: string; proc: DAI_func): RFilter; inline;
 begin
@@ -131,7 +131,8 @@ initialization
     newFilter('dump', 'dump', @DAI_loadDump),//
     newFilter('dai', 'DAI', @DAI_loadDAI),//
     newFilter('wav', 'WAV', @DAI_loadWAV),//
-    newFilter('png', 'PNG', @DAI_loadPNG)//
+    newFilter('png', 'PNG', @DAI_loadPNGOpt),//
+    newFilter('png', 'PNG (big)', @DAI_loadPNG)//
     ];
   SAVE_FILTERS := [//
     newFilter('bin', 'BIN', @DAI_saveBin),//

@@ -46,6 +46,7 @@ type
 
 procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 procedure Segment_resize(var seg: RSegment; const aSize: integer);
+procedure Segment_slice(var seg: RSegment; const minAddr, maxAddr: integer);
 procedure Segment_writeMetadata(var seg: RSegment; const path: string);
 function Segment_text(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;
 
@@ -83,9 +84,11 @@ end;
 
 procedure Segment_resize(var seg: RSegment; const aSize: integer);
 begin
-  with seg do begin
-    size := aSize;
-    SetLength(Data, size);
+  if (seg.size <> aSize) then begin
+    with seg do begin
+      size := aSize;
+      SetLength(Data, size);
+    end;
   end;
 end;
 
@@ -116,6 +119,13 @@ begin
     end;
     Lines.Add(s);
   end;
+end;
+
+procedure Segment_slice(var seg: RSegment; const minAddr, maxAddr: integer);
+begin
+  seg.addr := minAddr;
+  seg.size := maxAddr - minAddr + 1;
+  seg.Data := Copy(seg.Data, seg.addr, seg.size);
 end;
 
 procedure Segment_writeMetadata(var seg: RSegment; const path: string);
@@ -308,9 +318,7 @@ begin
         maxAddr := addr;
       end;
     end;
-    seg.addr := minAddr;
-    seg.size := maxAddr - minAddr + 1;
-    seg.Data := Copy(seg.Data, seg.addr, seg.size);
+    Segment_slice(seg, minAddr, maxAddr);
     Result := False;
   except
     on E: EConvertError do begin
