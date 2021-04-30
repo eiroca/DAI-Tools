@@ -47,6 +47,7 @@ type
 procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 procedure Segment_resize(var seg: RSegment; const aSize: integer);
 procedure Segment_writeMetadata(var seg: RSegment; const path: string);
+function Segment_text(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;
 
 function Dump_detect(const Lines: TStringList): EDumpType;
 function Dump_decode(const Lines: TStringList; var seg: RSegment): boolean;
@@ -88,6 +89,35 @@ begin
   end;
 end;
 
+function Segment_text(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;
+var
+  endAddr: integer;
+  i, sAdr, len, cPos: integer;
+  s: string;
+begin
+  Result := True;
+  endAddr := seg.addr + seg.size - 1;
+  sAdr := seg.addr;
+  cPos := 0;
+  Lines.Add(Format(headerFmt, [seg.addr, endAddr]));
+  while (sAdr < endAddr) do begin
+    s := Format(prefixFmt, [sAdr]);
+    len := $10 - (sAdr and $000F);
+    Inc(sAdr, len);
+    if (sAdr > endAddr) then begin
+      len := len - (sAdr - endAddr) + 1;
+    end;
+    for i := 0 to len - 1 do begin
+      if (i > 0) then begin
+        s := s + separator;
+      end;
+      s := s + Format(byteFmt, [seg.Data[cPos]]);
+      Inc(cPos);
+    end;
+    Lines.Add(s);
+  end;
+end;
+
 procedure Segment_writeMetadata(var seg: RSegment; const path: string);
 var
   conf: TJsonConfig;
@@ -121,7 +151,7 @@ begin
   end;
 end;
 
-procedure Segment_laodMetadata(var seg: RSegment; const path: string);
+procedure Segment_loadMetadata(var seg: RSegment; const path: string);
 var
   conf: TJsonConfig;
   aName: UnicodeString;

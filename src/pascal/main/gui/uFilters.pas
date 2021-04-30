@@ -140,6 +140,7 @@ initialization
     newFilter('asm', 'asm', @DAI_saveASM),//
     newFilter('png', 'PNG (full)', @DAI_saveFullPNG),//
     newFilter('png', 'PNG (fast)', @DAI_savePNG),//
+    newFilter('hrfb', 'HRFB', @DAI_saveHRFB),//
     newFilter('dai', 'DAI (bin)', @DAI_saveDAIbin),//
     newFilter('dai', 'DAI (basic)', @DAI_saveDAIbas),//
     newFilter('wav', 'WAV', @DAI_saveWAV)//

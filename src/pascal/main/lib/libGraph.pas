@@ -87,6 +87,7 @@ function DAI_initFont(const path: string): boolean;
 function DAI_infoFrameBuffer(var seg: RSegment; curAddr: integer; var fbi: RFrameBufferInfo): boolean;
 function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 function DAI_createFrame(var seg: RSegment; const C: TCanvas): boolean;
+function DAI_FrameBufferToText(var seg: RSegment; curAddr: integer; L: TStringList): boolean;
 
 implementation
 
@@ -97,7 +98,6 @@ const
 function DAI_encodeControlWord(resolution: integer; mode: integer; repLines: integer; enable_change: boolean; unit_color: boolean; color_reg: integer; color_sel: integer): word;
 begin
   Result := mode shl 14 + resolution shl 12 + repLines shl 8 + ENABLE_CHANGE_val[enable_change] + UNIT_COLOR_val[unit_color] + color_sel shl 4 + color_reg;
-
 end;
 
 function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
@@ -382,6 +382,120 @@ begin
   Result := True;
 end;
 
+function DAI_FrameBufferToText(var seg: RSegment; curAddr: integer; L: TStringList): boolean;
+var
+  curLin: integer;
+  CW: ControlWord;
+  rows, i, k: integer;
+  data1, data2: integer;
+  s: string;
+  md, cl: string;
+  c1, c2: string;
+begin
+  Result := False;
+  curLin := 0;
+  rows := PAL_SCANLINES;
+  while (curLin < rows) do begin
+    if (curAddr < 1) then begin
+      exit;
+    end;
+    s := Format('%.3d', [curLin div 2]);
+    CW := DAI_decodeControlWord(seg, curAddr);
+    if (curAddr < (CW.data_size - 1)) then begin
+      exit;
+    end;
+    if CW.unit_color then begin
+      case CW.mode of
+        %00: begin
+          md := 'F';
+          cl := '4';
+        end;
+        %01: begin
+          md := 'R';
+          cl := '4';
+        end;
+        %10: begin
+          md := 'F';
+          cl := 'B';
+        end;
+        else begin
+          md := 'R';
+          cl := 'B';
+        end;
+      end;
+    end
+    else begin
+      case CW.mode of
+        %00: begin
+          md := 'G';
+          cl := '4';
+        end;
+        %01: begin
+          md := 'T';
+          cl := '4';
+        end;
+        %10: begin
+          md := 'G';
+          cl := 'B';
+        end;
+        else begin
+          md := 'T';
+          cl := 'B';
+        end;
+      end;
+    end;
+    s := s + Format(' %dx%x %s %s', [CW.line_width, CW.line_pxlHei, md, cl]);
+    if (CW.enable_change) then begin
+      s := s + Format(' [%x]=%x', [CW.color_reg, CW.color_sel]);
+    end;
+    if cl = '4' then begin
+      s := s + Format(' [%x,%x,%x,%x]', [DAI_COLORREG[0], DAI_COLORREG[1], DAI_COLORREG[2], DAI_COLORREG[3]]);
+    end;
+    if (md = 'F') or (md = 'R') then begin
+      data1 := seg.Data[curAddr];
+      Dec(curAddr);
+      data2 := seg.Data[curAddr];
+      Dec(curAddr);
+      s := s + Format(' %1:.2x%0:.2x', [data1, data2]);
+    end
+    else if (md = 'G') then begin
+      for i := 0 to CW.line_colCnt - 1 do begin
+        data1 := seg.Data[curAddr];
+        Dec(curAddr);
+        data2 := seg.Data[curAddr];
+        Dec(curAddr);
+        if (cl = 'B') then begin
+          s := s + ' ';
+          c1 := IntToHex(data2 and $0F, 1);
+          c2 := IntToHex((data2 shr 4) and $0F, 1);
+          for k := 0 to 7 do begin
+            if ((data1 shr (7 - k)) and $01) <> 0 then begin
+              s := s + c2;
+            end
+            else begin
+              s := s + c1;
+            end;
+          end;
+        end
+        else begin
+          s := s + Format(' %1:.2x%0:.2x', [data1, data2]);
+        end;
+      end;
+    end
+    else begin
+      for i := 0 to CW.line_colCnt - 1 do begin
+        data1 := seg.Data[curAddr];
+        Dec(curAddr);
+        data2 := seg.Data[curAddr];
+        Dec(curAddr);
+        s := s + Format(' %1:.2x%0:.2x', [data1, data2]);
+      end;
+    end;
+    L.Add(s);
+    Inc(curLin, CW.line_pxlHei * 2);
+  end;
+  Result := True;
+end;
 
 procedure InitColor();
 begin

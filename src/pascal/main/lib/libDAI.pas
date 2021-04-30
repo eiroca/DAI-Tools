@@ -43,11 +43,16 @@ function DAI_saveFullPNG(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveDAIbin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveDAIbas(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveWAV(const outPath: string; var seg: RSegment): boolean;
+function DAI_saveHRFB(const outPath: string; var seg: RSegment): boolean;
 
 implementation
 
 uses
   libGraph, libGraphFast, libGraphFull, libAudio;
+
+const
+  EXCEPTION_FMT = 'Exception: %s';
+  ERR_INVALIDSEGMENT = 'Invalid segment';
 
 threadvar
   lastError: string;
@@ -57,32 +62,47 @@ begin
   Result := lastError;
 end;
 
-function _saveSegData(fs: TFileStream; var seg: RSegment): boolean;
+function _saveSegData(const path: string; var seg: RSegment; const writeSize: boolean): boolean;
 var
+  fs: TBufferedFileStream;
   i: integer;
 begin
   Result := False;
+  fs := TBufferedFileStream.Create(path, fmCreate);
   try
     try
+      if writeSize then begin
+        fs.WriteWord(seg.addr);
+      end;
       for i := 0 to seg.size - 1 do begin
         fs.WriteByte(seg.Data[i]);
       end;
       Result := True;
     except
-      on E: Exception do lastError := 'Exception: ' + E.Message;
+      on E: Exception do lastError := Format(EXCEPTION_FMT, [E.Message]);
     end;
   finally
     fs.Free;
   end;
 end;
 
-function _loadSegData(fs: TFileStream; sz: integer; var seg: RSegment): boolean;
+function _loadSegData(const path: string; var seg: RSegment; const readSize: boolean): boolean;
 var
+  fs: TBufferedFileStream;
+  sz: integer;
   i: integer;
 begin
   Result := False;
+  fs := TBufferedFileStream.Create(path, fmOpenRead);
+  if (readSize) then begin
+    sz := fs.Size - 2;
+    seg.addr := fs.ReadWord;
+  end
+  else begin
+    sz := fs.Size;
+    seg.size := sz;
+  end;
   SetLength(seg.Data, sz);
-  seg.size := sz;
   try
     try
       for i := 0 to sz - 1 do begin
@@ -112,48 +132,19 @@ begin
   end;
 end;
 
-function _bin2txt(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;
-var
-  endAddr: integer;
-  i, sAdr, len, cPos: integer;
-  s: string;
-begin
-  Result := True;
-  endAddr := seg.addr + seg.size - 1;
-  sAdr := seg.addr;
-  cPos := 0;
-  Lines.Add(Format(headerFmt, [seg.addr, endAddr]));
-  while (sAdr < endAddr) do begin
-    s := Format(prefixFmt, [sAdr]);
-    len := $10 - (sAdr and $000F);
-    Inc(sAdr, len);
-    if (sAdr > endAddr) then begin
-      len := len - (sAdr - endAddr) + 1;
-    end;
-    for i := 0 to len - 1 do begin
-      if (i > 0) then begin
-        s := s + separator;
-      end;
-      s := s + Format(byteFmt, [seg.Data[cPos]]);
-      Inc(cPos);
-    end;
-    Lines.Add(s);
-  end;
-end;
-
 function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
 var
   Lines: TStringList;
 begin
   if (seg.size = 0) then begin
     Result := False;
-    lastError := 'Invalid segment';
+    lastError := ERR_INVALIDSEGMENT;
     exit;
   end;
   Result := True;
+  Lines := TStringList.Create;
   try
-    Lines := TStringList.Create;
-    _bin2txt(seg, Lines, '>D%.4x %.4x', '%.4x', '%.2x', ' ');
+    Segment_text(seg, Lines, '>D%.4x %.4x', '%.4x', '%.2x', ' ');
     if (seg.entrypoint <> 0) then begin
       Lines.Insert(1, Format('>Run Address = %4x', [seg.entrypoint]));
     end;
@@ -162,7 +153,7 @@ begin
     except
       on E: Exception do begin
         Result := False;
-        lastError := 'Exception: ' + E.Message;
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
       end;
     end;
   finally
@@ -176,19 +167,19 @@ var
 begin
   if (seg.size = 0) then begin
     Result := False;
-    lastError := 'Invalid segment';
+    lastError := ERR_INVALIDSEGMENT;
     exit;
   end;
   Result := True;
+  Lines := TStringList.Create;
   try
-    Lines := TStringList.Create;
-    _bin2txt(seg, Lines, #9'.org'#9'$%.4x', #9'.byte'#9, '$%.2x', ',');
+    Segment_text(seg, Lines, #9'.org'#9'$%.4x', #9'.byte'#9, '$%.2x', ',');
     try
       Lines.SaveToFile(outPath);
     except
       on E: Exception do begin
         Result := False;
-        lastError := 'Exception: ' + E.Message;
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
       end;
     end;
   finally
@@ -197,107 +188,63 @@ begin
 end;
 
 function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
-var
-  fs: TBufferedFileStream;
 begin
   Result := False;
   lastError := 'Unable to write ' + outPath;
   if (seg.size > 0) then begin
-    fs := TBufferedFileStream.Create(outPath, fmCreate);
-    if not _saveSegData(fs, seg) then begin
-      exit;
+    if _saveSegData(outPath, seg, False) then begin
+      Result := True;
+      lastError := '';
     end;
-    Result := True;
-    lastError := '';
   end
   else begin
-    lastError := 'Invalid segment';
+    lastError := ERR_INVALIDSEGMENT;
   end;
 end;
 
 function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
-var
-  fs: TBufferedFileStream;
 begin
   Result := False;
   lastError := 'Unable to write ' + outPath;
   if (seg.size > 0) then begin
-    fs := TBufferedFileStream.Create(outPath, fmCreate);
-    try
-      fs.WriteWord(seg.addr);
-    except
-      on E: Exception do begin
-        lastError := 'Exception: ' + E.Message;
-        fs.Free;
-        exit;
-      end;
+    if _saveSegData(outPath, seg, True) then begin
+      Result := True;
+      lastError := '';
     end;
-    if not _saveSegData(fs, seg) then begin
-      exit;
-    end;
-    Result := True;
-    lastError := '';
   end
   else begin
-    lastError := 'Invalid segment';
+    lastError := ERR_INVALIDSEGMENT;
   end;
 end;
 
 function DAI_loadDAI(const inPath: string; var seg: RSegment): boolean;
-var
-  fs: TBufferedFileStream;
-  sz: integer;
 begin
   Result := False;
   lastError := 'Unable to read ' + inPath;
-  fs := TBufferedFileStream.Create(inPath, fmOpenRead);
-  sz := fs.Size;
-  if not _loadSegData(fs, sz, seg) then begin
-    exit;
+  if _loadSegData(inPath, seg, False) then begin
+    Result := True;
+    lastError := '';
   end;
-  Result := True;
-  lastError := '';
 end;
 
 function DAI_loadBin(const inPath: string; var seg: RSegment): boolean;
-var
-  fs: TBufferedFileStream;
-  sz: integer;
 begin
   Result := False;
   lastError := 'Unable to read ' + inPath;
-  fs := TBufferedFileStream.Create(inPath, fmOpenRead);
-  sz := fs.Size;
-  if not _loadSegData(fs, sz, seg) then begin
-    exit;
+  if _loadSegData(inPath, seg, False) then begin
+    Result := True;
+    lastError := '';
   end;
-  Result := True;
-  lastError := '';
 end;
 
 function DAI_loadSBin(const inPath: string; var seg: RSegment): boolean;
-var
-  fs: TBufferedFileStream;
-  sz: integer;
 begin
   Result := False;
   lastError := 'Unable to read ' + inPath;
-  fs := TBufferedFileStream.Create(inPath, fmOpenRead);
-  try
-    sz := fs.Size - 2;
-    seg.addr := fs.ReadWord;
-  except
-    on E: Exception do begin
-      lastError := 'Exception: ' + E.Message;
-      fs.Free;
-      exit;
-    end;
+  if _loadSegData(inPath, seg, True) then begin
+    Result := True;
+    lastError := '';
   end;
-  if not _loadSegData(fs, sz, seg) then begin
-    exit;
-  end;
-  Result := True;
-  lastError := '';
 end;
 
 function DAI_savePNG(const outPath: string; var seg: RSegment): boolean;
@@ -310,7 +257,7 @@ begin
   Result := False;
   lastError := 'Unable to write ' + outPath;
   if (seg.size < 4) then begin
-    lastError := 'Invalid segment';
+    lastError := ERR_INVALIDSEGMENT;
     exit;
   end;
   curAddr := -1;
@@ -331,7 +278,7 @@ begin
         lastError := '';
       except
         on E: Exception do begin
-          lastError := 'Exception: ' + E.Message;
+          lastError := Format(EXCEPTION_FMT, [E.Message]);
           exit;
         end;
       end;
@@ -354,7 +301,7 @@ begin
   Result := False;
   lastError := 'Unable to write ' + outPath;
   if (seg.size < 4) then begin
-    lastError := 'Invalid segment';
+    lastError := ERR_INVALIDSEGMENT;
     exit;
   end;
   curAddr := -1;
@@ -365,27 +312,31 @@ begin
   DAI_infoFrameBuffer(seg, curAddr, fbi);
   seg.entrypoint := curAddr - fbi.sizeVis + 1;
   B := TPortableNetworkGraphic.Create;
-  B.SetSize(DAI_IMAGE_WIDTH, DAI_IMAGE_LINES);
-  C := B.Canvas;
-  if DAI_decodeFullFrameBuffer(seg, curAddr, C) then begin
-    try
-      B.SaveToFile(outPath);
-      Result := True;
-      lastError := '';
-    except
-      on E: Exception do begin
-        lastError := 'Exception: ' + E.Message;
-        exit;
+  try
+    B.SetSize(DAI_IMAGE_WIDTH, DAI_IMAGE_LINES);
+    C := B.Canvas;
+    if DAI_decodeFullFrameBuffer(seg, curAddr, C) then begin
+      try
+        B.SaveToFile(outPath);
+        Result := True;
+        lastError := '';
+      except
+        on E: Exception do begin
+          lastError := Format(EXCEPTION_FMT, [E.Message]);
+          exit;
+        end;
       end;
+    end
+    else begin
+      lastError := 'Invalid Frame Buffer';
     end;
-  end
-  else begin
-    lastError := 'Invalid Frame Buffer';
+  finally
+    B.Free;
   end;
 end;
 
-// Calculate the checksum following the DAI protocol
 function Checksum(cs: integer; n: integer): integer;
+  // Calculate the checksum following the DAI protocol
 var
   ret: integer;
 begin
@@ -466,7 +417,7 @@ begin
       lastError := '';
     except
       on E: Exception do begin
-        lastError := 'Exception: ' + E.Message;
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
         exit;
       end;
     end;
@@ -524,7 +475,7 @@ begin
       lastError := '';
     except
       on E: Exception do begin
-        lastError := 'Exception: ' + E.Message;
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
         exit;
       end;
     end;
@@ -533,20 +484,14 @@ begin
   end;
 end;
 
-
-(* Write a BIT
- P (Pre-Leader): 1 x 00-80
- L (Leader): 7 x FF-7F / 7 x 00-80 / 7 x FF-7F / 7 x 00-80
- 1 (bit 1): 22 x FF-7F / 22 x 00-80 / 14 x FF-7F / 14 x 00-80
- 0 (bit 0): 14 x FF-7F / 14 x 00-80 / 22 x FF-7F / 22 x 00-80
- T (Trailer): 10 x FF-7F / 10 x 00-80 / 14 x FF-7F / 14 x 00-80
-*)
 procedure _writeAudioSymbolP(var d: RAudio);
+// P (Pre-Leader): 1 x 00-80
 begin
   Audio_Append(d, False, 1);
 end;
 
 procedure _writeAudioSymbolL(var d: RAudio);
+// L (Leader): 7 x FF-7F / 7 x 00-80 / 7 x FF-7F / 7 x 00-80
 begin
   Audio_Append(d, True, 13);
   Audio_Append(d, False, 13);
@@ -555,6 +500,7 @@ begin
 end;
 
 procedure _writeAudioSymbolT(var d: RAudio);
+// T (Trailer): 10 x FF-7F / 10 x 00-80 / 14 x FF-7F / 14 x 00-80
 begin
   Audio_Append(d, True, 9);
   Audio_Append(d, False, 9);
@@ -563,6 +509,10 @@ begin
 end;
 
 procedure _writeAudioSymbol(var d: RAudio; b: boolean);
+(* Write a BIT
+ 1 (bit 1): 22 x FF-7F / 22 x 00-80 / 14 x FF-7F / 14 x 00-80
+ 0 (bit 0): 14 x FF-7F / 14 x 00-80 / 22 x FF-7F / 22 x 00-80
+*)
 var
   nbre_a, nbre_b: integer;
 begin
@@ -580,8 +530,8 @@ begin
   Audio_Append(d, False, nbre_b);
 end;
 
-// Decompose a Byte in Bits String and write them
 procedure _writeAudioByte(var d: RAudio; b: byte);
+// Decompose a Byte in Bits String and write them
 var
   i: integer;
   m: integer;
@@ -627,7 +577,7 @@ begin
     lastError := '';
   except
     on E: Exception do begin
-      lastError := 'Exception: ' + E.Message;
+      lastError := Format(EXCEPTION_FMT, [E.Message]);
       exit;
     end;
   end;
@@ -782,7 +732,6 @@ begin
       lastError := 'Invalid Leader';
       exit;
     end;
-
     eb := True;
     b := False;
     vb := True;
@@ -821,7 +770,7 @@ begin
     lastError := '';
   except
     on E: Exception do begin
-      lastError := 'Exception: ' + E.Message;
+      lastError := Format(EXCEPTION_FMT, [E.Message]);
       exit;
     end;
   end;
@@ -837,25 +786,63 @@ begin
   Segment_init(seg, $C000);
   B := TPortableNetworkGraphic.Create;
   try
-    B.LoadFromFile(inPath);
-    if (B.Width <> DAI_SCREEN_WIDTH) or (B.Height <> DAI_SCREEN_LINES) then begin
-      lastError := Format('Image must be (%d,%d)', [DAI_SCREEN_WIDTH, DAI_SCREEN_LINES]);
-      exit;
+    try
+      B.LoadFromFile(inPath);
+      if (B.Width <> DAI_SCREEN_WIDTH) or (B.Height <> DAI_SCREEN_LINES) then begin
+        lastError := Format('Image must be (%d,%d)', [DAI_SCREEN_WIDTH, DAI_SCREEN_LINES]);
+        exit;
+      end;
+      C := B.Canvas;
+      if not DAI_createFrame(seg, C) then begin
+        lastError := 'Unable to crate FrameBuffer';
+        exit;
+      end;
+      Result := True;
+      lastError := '';
+    except
+      on E: Exception do begin
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
+        exit;
+      end;
     end;
-    C := B.Canvas;
-    if not DAI_createFrame(seg, C) then begin
-      lastError := 'Unable to crate FrameBuffer';
-      exit;
-    end;
-    Result := True;
-    lastError := '';
-  except
-    on E: Exception do begin
-      lastError := 'Exception: ' + E.Message;
-      exit;
-    end;
+  finally
+    B.Free;
   end;
 end;
 
+function DAI_saveHRFB(const outPath: string; var seg: RSegment): boolean;
+var
+  Lines: TStringList;
+  curAddr: integer;
+begin
+  if (seg.size < 4) then begin
+    Result := False;
+    lastError := ERR_INVALIDSEGMENT;
+    exit;
+  end;
+  Result := True;
+  Lines := TStringList.Create;
+  try
+    curAddr := -1;
+    if (curAddr = -1) then begin
+      curAddr := seg.size - 1;
+    end;
+    if not DAI_FrameBufferToText(seg, curAddr, Lines) then begin
+      Result := False;
+      lastError := ERR_INVALIDSEGMENT;
+      exit;
+    end;
+    try
+      Lines.SaveToFile(outPath);
+    except
+      on E: Exception do begin
+        Result := False;
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
 
 end.

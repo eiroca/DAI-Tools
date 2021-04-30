@@ -145,7 +145,6 @@ begin
       for s := 0 to xl - 1 do begin
         C.Pixels[posX, posY] := col;
         Inc(posX);
-
       end;
     end;
     Inc(posY);
@@ -182,7 +181,6 @@ begin
     Inc(posY);
   end;
 end;
-
 
 procedure _fastDrawBlockText16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
 var
