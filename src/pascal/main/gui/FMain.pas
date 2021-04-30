@@ -130,17 +130,17 @@ begin
     SetStatus(Format('Invalid Conversion', [fName, tIn, tOut]));
     exit;
   end;
-  inFilter:= FindLoadFilter(cbInput.ItemIndex);
-  outFilter:= FindSaveFilter(cbOutput.ItemIndex);
+  inFilter := FindLoadFilter(cbInput.ItemIndex);
+  outFilter := FindSaveFilter(cbOutput.ItemIndex);
   loadFunc := inFilter^.proc;
-  saveFunc :=       outFilter^.proc;
+  saveFunc := outFilter^.proc;
   tOut := outFilter^.ext;
   if (loadFunc = nil) or (saveFunc = nil) then begin
     SetStatus(Format('Conversion from %s to %s is not supported yet!', [tIn, tOut]));
     exit;
   end;
   outPath := getOutputPath(inPath, tOut);
-  s.Name := ExtractFileName(outPath);
+  s.Name := ChangeFileExt(ExtractFileName(outPath), '');
   s.size := 0;
   if (outPath = inPath) then begin
     outPath := outPath + '.' + tOut;

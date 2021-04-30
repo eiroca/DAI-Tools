@@ -37,6 +37,7 @@ function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
 function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
+function DAI_saveASM(const outPath: string; var seg: RSegment): boolean;
 function DAI_savePNG(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveFullPNG(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveDAIbin(const outPath: string; var seg: RSegment): boolean;
@@ -68,7 +69,7 @@ begin
       end;
       Result := True;
     except
-      on E: Exception do lastError := 'Expception: ' + E.Message;
+      on E: Exception do lastError := 'Exception: ' + E.Message;
     end;
   finally
     fs.Free;
@@ -89,7 +90,7 @@ begin
       end;
       Result := True;
     except
-      on E: Exception do lastError := 'Expception: ' + E.Message;
+      on E: Exception do lastError := 'Exception: ' + E.Message;
     end;
   finally
     fs.Free;
@@ -111,12 +112,38 @@ begin
   end;
 end;
 
-function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
+function _bin2txt(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;
 var
-  Lines: TStringList;
   endAddr: integer;
   i, sAdr, len, cPos: integer;
   s: string;
+begin
+  Result := True;
+  endAddr := seg.addr + seg.size - 1;
+  sAdr := seg.addr;
+  cPos := 0;
+  Lines.Add(Format(headerFmt, [seg.addr, endAddr]));
+  while (sAdr < endAddr) do begin
+    s := Format(prefixFmt, [sAdr]);
+    len := $10 - (sAdr and $000F);
+    Inc(sAdr, len);
+    if (sAdr > endAddr) then begin
+      len := len - (sAdr - endAddr) + 1;
+    end;
+    for i := 0 to len - 1 do begin
+      if (i > 0) then begin
+        s := s + separator;
+      end;
+      s := s + Format(byteFmt, [seg.Data[cPos]]);
+      Inc(cPos);
+    end;
+    Lines.Add(s);
+  end;
+end;
+
+function DAI_saveDump(const outPath: string; var seg: RSegment): boolean;
+var
+  Lines: TStringList;
 begin
   if (seg.size = 0) then begin
     Result := False;
@@ -124,34 +151,44 @@ begin
     exit;
   end;
   Result := True;
-  endAddr := seg.addr + seg.size - 1;
   try
     Lines := TStringList.Create;
-    Lines.Add(Format('>D%4x %x', [seg.addr, endAddr]));
+    _bin2txt(seg, Lines, '>D%.4x %.4x', '%.4x', '%.2x', ' ');
     if (seg.entrypoint <> 0) then begin
-      Lines.Add(Format('>Run Address = %4x', [seg.entrypoint]));
-    end;
-    sAdr := seg.addr;
-    cPos := 0;
-    while (sAdr < endAddr) do begin
-      s := IntToHex(sAdr, 4);
-      len := $10 - (sAdr and $000F);
-      Inc(sAdr, len);
-      if (sAdr > endAddr) then begin
-        len := len - (sAdr - endAddr) + 1;
-      end;
-      for i := 0 to len - 1 do begin
-        s := s + ' ' + IntToHex(seg.Data[cPos], 2);
-        Inc(cPos);
-      end;
-      Lines.Add(s);
+      Lines.Insert(1, Format('>Run Address = %4x', [seg.entrypoint]));
     end;
     try
       Lines.SaveToFile(outPath);
     except
       on E: Exception do begin
         Result := False;
-        lastError := 'Expception: ' + E.Message;
+        lastError := 'Exception: ' + E.Message;
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+function DAI_saveASM(const outPath: string; var seg: RSegment): boolean;
+var
+  Lines: TStringList;
+begin
+  if (seg.size = 0) then begin
+    Result := False;
+    lastError := 'Invalid segment';
+    exit;
+  end;
+  Result := True;
+  try
+    Lines := TStringList.Create;
+    _bin2txt(seg, Lines, #9'.org'#9'$%.4x', #9'.byte'#9, '$%.2x', ',');
+    try
+      Lines.SaveToFile(outPath);
+    except
+      on E: Exception do begin
+        Result := False;
+        lastError := 'Exception: ' + E.Message;
       end;
     end;
   finally
@@ -190,7 +227,7 @@ begin
       fs.WriteWord(seg.addr);
     except
       on E: Exception do begin
-        lastError := 'Expception: ' + E.Message;
+        lastError := 'Exception: ' + E.Message;
         fs.Free;
         exit;
       end;
@@ -251,7 +288,7 @@ begin
     seg.addr := fs.ReadWord;
   except
     on E: Exception do begin
-      lastError := 'Expception: ' + E.Message;
+      lastError := 'Exception: ' + E.Message;
       fs.Free;
       exit;
     end;
@@ -294,7 +331,7 @@ begin
         lastError := '';
       except
         on E: Exception do begin
-          lastError := 'Expception: ' + E.Message;
+          lastError := 'Exception: ' + E.Message;
           exit;
         end;
       end;
@@ -337,7 +374,7 @@ begin
       lastError := '';
     except
       on E: Exception do begin
-        lastError := 'Expception: ' + E.Message;
+        lastError := 'Exception: ' + E.Message;
         exit;
       end;
     end;
@@ -429,7 +466,7 @@ begin
       lastError := '';
     except
       on E: Exception do begin
-        lastError := 'Expception: ' + E.Message;
+        lastError := 'Exception: ' + E.Message;
         exit;
       end;
     end;
@@ -487,7 +524,7 @@ begin
       lastError := '';
     except
       on E: Exception do begin
-        lastError := 'Expception: ' + E.Message;
+        lastError := 'Exception: ' + E.Message;
         exit;
       end;
     end;
@@ -590,7 +627,7 @@ begin
     lastError := '';
   except
     on E: Exception do begin
-      lastError := 'Expception: ' + E.Message;
+      lastError := 'Exception: ' + E.Message;
       exit;
     end;
   end;
@@ -784,7 +821,7 @@ begin
     lastError := '';
   except
     on E: Exception do begin
-      lastError := 'Expception: ' + E.Message;
+      lastError := 'Exception: ' + E.Message;
       exit;
     end;
   end;
@@ -814,7 +851,7 @@ begin
     lastError := '';
   except
     on E: Exception do begin
-      lastError := 'Expception: ' + E.Message;
+      lastError := 'Exception: ' + E.Message;
       exit;
     end;
   end;

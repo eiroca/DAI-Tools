@@ -37,7 +37,6 @@ type
     s: RSegment;
     Result: boolean;
   begin
-    s.Name := '';
     paths := TStringList.Create;
     opts := TStringList.Create;
     inType := -1;
@@ -82,6 +81,8 @@ type
       outPath := ChangeFileExt(inPath, '.' + saveFilter^.ext);
     end;
     writeln('Converting ' + inPath + ' [' + loadFilter^.displayName + '] to ' + outPath + ' [' + saveFilter^.displayName + ']');
+    s.size := 0;
+    s.Name := ChangeFileExt(ExtractFileName(outPath), '');
     Result := loadFilter^.proc(inPath, s);
     if not Result then begin
       Writeln(DAI_lastError());

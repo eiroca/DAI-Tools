@@ -137,6 +137,7 @@ initialization
     newFilter('bin', 'BIN', @DAI_saveBin),//
     newFilter('sbin', 'SBIN', @DAI_saveSBin),//
     newFilter('dump', 'dump', @DAI_saveDump),//
+    newFilter('asm', 'asm', @DAI_saveASM),//
     newFilter('png', 'PNG (full)', @DAI_saveFullPNG),//
     newFilter('png', 'PNG (fast)', @DAI_savePNG),//
     newFilter('dai', 'DAI (bin)', @DAI_saveDAIbin),//
