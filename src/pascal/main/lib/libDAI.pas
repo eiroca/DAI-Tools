@@ -49,7 +49,7 @@ function DAI_saveHRFB(const outPath: string; var seg: RSegment): boolean;
 implementation
 
 uses
-  libGraph, libGraphFast, libGraphFull, libAudio;
+  libGraph, libGraphFast, libGraphFull, libGraphFrame, libAudio;
 
 const
   EXCEPTION_FMT = 'Exception: %s';
@@ -63,7 +63,7 @@ begin
   Result := lastError;
 end;
 
-function _saveSegData(const path: string; var seg: RSegment; const writeSize: boolean): boolean;
+function _saveSegData(const path: string; var seg: RSegment; const writeAddr: boolean): boolean;
 var
   fs: TBufferedFileStream;
   i: integer;
@@ -72,7 +72,7 @@ begin
   fs := TBufferedFileStream.Create(path, fmCreate);
   try
     try
-      if writeSize then begin
+      if writeAddr then begin
         fs.WriteWord(seg.addr);
       end;
       for i := 0 to seg.size - 1 do begin
@@ -87,7 +87,7 @@ begin
   end;
 end;
 
-function _loadSegData(const path: string; var seg: RSegment; const readSize: boolean): boolean;
+function _loadSegData(const path: string; var seg: RSegment; const readAddr: boolean): boolean;
 var
   fs: TBufferedFileStream;
   sz: integer;
@@ -95,15 +95,16 @@ var
 begin
   Result := False;
   fs := TBufferedFileStream.Create(path, fmOpenRead);
-  if (readSize) then begin
+  if (readAddr) then begin
     sz := fs.Size - 2;
     seg.addr := fs.ReadWord;
   end
   else begin
     sz := fs.Size;
-    seg.size := sz;
+    seg.addr := 0;
   end;
   SetLength(seg.Data, sz);
+  seg.size := sz;
   try
     try
       for i := 0 to sz - 1 do begin
@@ -777,7 +778,7 @@ begin
   end;
 end;
 
-function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
+function _loadPNG(const inPath: string; var seg: RSegment; optimize: boolean): boolean;
 var
   B: TPortableNetworkGraphic;
   C: TCanvas;
@@ -794,9 +795,17 @@ begin
         exit;
       end;
       C := B.Canvas;
-      if not DAI_createFrame(seg, C) then begin
-        lastError := 'Unable to crate FrameBuffer';
-        exit;
+      if (optimize) then begin
+        if not DAI_createFrameOpt(seg, C) then begin
+          lastError := 'Unable to crate FrameBuffer';
+          exit;
+        end;
+      end
+      else begin
+        if not DAI_createFrame(seg, C) then begin
+          lastError := 'Unable to crate FrameBuffer';
+          exit;
+        end;
       end;
       Result := True;
       lastError := '';
@@ -811,38 +820,14 @@ begin
   end;
 end;
 
-function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
-var
-  B: TPortableNetworkGraphic;
-  C: TCanvas;
+function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
 begin
-  Result := False;
-  lastError := 'Unable to read ' + inPath;
-  Segment_init(seg, $C000);
-  B := TPortableNetworkGraphic.Create;
-  try
-    try
-      B.LoadFromFile(inPath);
-      if (B.Width <> DAI_SCREEN_WIDTH) or (B.Height <> DAI_SCREEN_LINES) then begin
-        lastError := Format('Image must be (%d,%d)', [DAI_SCREEN_WIDTH, DAI_SCREEN_LINES]);
-        exit;
-      end;
-      C := B.Canvas;
-      if not DAI_createFrameOpt(seg, C) then begin
-        lastError := 'Unable to crate FrameBuffer';
-        exit;
-      end;
-      Result := True;
-      lastError := '';
-    except
-      on E: Exception do begin
-        lastError := Format(EXCEPTION_FMT, [E.Message]);
-        exit;
-      end;
-    end;
-  finally
-    B.Free;
-  end;
+  Result := _loadPNG(inPath, seg, True);
+end;
+
+function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
+begin
+  Result := _loadPNG(inPath, seg, False);
 end;
 
 function DAI_saveHRFB(const outPath: string; var seg: RSegment): boolean;
