@@ -20,11 +20,10 @@ interface
 
 uses
   libTools, libGraph,
-  Classes, SysUtils,
-  Graphics;
+  Classes, SysUtils, FPImage;
 
-function DAI_createFrame(var seg: RSegment; const C: TCanvas): boolean;
-function DAI_createFrameOpt(var seg: RSegment; const C: TCanvas): boolean;
+function DAI_createFrame(var seg: RSegment; const C: TFPCustomImage): boolean;
+function DAI_createFrameOpt(var seg: RSegment; const C: TFPCustomImage): boolean;
 
 implementation
 
@@ -86,10 +85,17 @@ begin
   end;
 end;
 
-function _findBestColor(const col: TColor; const pal: array of TColor): integer;
+procedure RedGreenBlue(const col: TFPColor; var R, G, B: byte); inline;
+begin
+  R := col.Red shr 8;
+  G := col.Green shr 8;
+  B := col.Blue shr 8;
+end;
+
+function _findBestColor(const col: TFPColor; const pal: TFPPalette): integer;
 var
   i, err: integer;
-  daiCol: TColor;
+  daiCol: TFPColor;
   R1, G1, B1: byte;
   R2, G2, B2: byte;
   dR, dG, dB: integer;
@@ -98,7 +104,7 @@ begin
   Result := 0;
   minErr := MaxInt;
   RedGreenBlue(col, R1, G1, B1);
-  for i := high(pal) downto low(pal) do begin
+  for i := 0 to pal.Count - 1 do begin
     daiCol := pal[i];
     RedGreenBlue(daiCol, R2, G2, B2);
     dR := (R1 - R2);
@@ -182,9 +188,9 @@ begin
   Dec(addr);
   seg.Data[addr] := CW and $FF;
   Dec(addr);
-  seg.Data[addr] := c16 shl 4 + c16;
-  Dec(addr);
   seg.Data[addr] := 0;
+  Dec(addr);
+  seg.Data[addr] := c16 shl 4 + c16;
   Dec(addr);
 end;
 
@@ -193,12 +199,13 @@ var
   xc, x: integer;
   posX: integer;
   blkCol: RColArr;
-  col: TColor;
+  col: TFPColor;
   tC, C1, C2, c16: integer;
-  pal: array[0..1] of TColor;
+  pal: TFPPalette;
   CW: word;
   v, m: integer;
 begin
+  pal := TFPPalette.Create(2);
   posX := 0;
   CW := DAI_encodeControlWord(2, 2, (h - 1), False, False, 0, 0);
   seg.Data[addr] := (CW shr 8) and $FF;
@@ -222,28 +229,31 @@ begin
     pal[0] := DAI_PALETTE[C1];
     pal[1] := DAI_PALETTE[C2];
     v := 0;
-    m := $80;
-    Dec(posX, 8);
-    for x := 0 to 7 do begin
-      col := DAI_PALETTE[lin.pxl[PosX]];
-      if _findBestColor(col, pal) = 0 then begin
-        v := v or m;
+    if (C1 <> C2) then begin
+      m := $80;
+      Dec(posX, 8);
+      for x := 0 to 7 do begin
+        col := DAI_PALETTE[lin.pxl[PosX]];
+        if _findBestColor(col, pal) = 0 then begin
+          v := v or m;
+        end;
+        m := m shr 1;
+        Inc(posX);
       end;
-      m := m shr 1;
-      Inc(posX);
     end;
     seg.Data[addr] := v;
     Dec(addr);
     seg.Data[addr] := C1 shl 4 + C2;
     Dec(addr);
   end;
+  FreeAndNil(pal);
 end;
 
-function DAI_createFrameOpt(var seg: RSegment; const C: TCanvas): boolean;
+function DAI_createFrameOpt(var seg: RSegment; const C: TFPCustomImage): boolean;
 var
   i, x, y: integer;
   curLin, nxtLin: integer;
-  col: TColor;
+  col: TFPColor;
   nc, ht, hh, c16: integer;
   addr: integer;
   Screen: RScreen;
@@ -265,7 +275,7 @@ begin
       ct := cct;
       FillByte(frq, SizeOf(frq), 0);
       for x := 0 to DAI_SCREEN_WIDTH - 1 do begin
-        col := C.Pixels[x, y];
+        col := C.Colors[x, y];
         c16 := _findBestColor(col, DAI_PALETTE);
         pxl[x] := c16;
         Inc(frq[c16]);
@@ -315,14 +325,14 @@ begin
   Result := True;
 end;
 
-function DAI_createFrame(var seg: RSegment; const C: TCanvas): boolean;
+function DAI_createFrame(var seg: RSegment; const C: TFPCustomImage): boolean;
 var
   xc, x, y: integer;
   posX, PosY: integer;
   blkCol: RColArr;
-  col: TColor;
+  col: TFPColor;
   tC, C1, C2, c16: integer;
-  pal: array[0..1] of TColor;
+  pal: TFPPalette;
   CW: word;
   addr: integer;
   v, m: integer;
@@ -333,6 +343,7 @@ begin
   posX := 0;
   blkCol[0] := 0;
   addr := $BFFF;
+  pal := TFPPalette.Create(2);
   for y := 0 to DAI_SCREEN_LINES - 1 do begin
     posX := 0;
     CW := DAI_encodeControlWord(2, 2, 0, False, False, 0, 0);
@@ -343,7 +354,7 @@ begin
     for xc := 0 to 44 - 1 do begin
       FillByte(blkCol, SizeOf(blkCol), 0);
       for x := 0 to 7 do begin
-        col := C.Pixels[posX, PosY];
+        col := C.Colors[posX, PosY];
         c16 := _findBestColor(col, DAI_PALETTE);
         Inc(blkCol[c16]);
         Inc(posX);
@@ -357,15 +368,17 @@ begin
       pal[0] := DAI_PALETTE[C1];
       pal[1] := DAI_PALETTE[C2];
       v := 0;
-      m := $80;
-      Dec(posX, 8);
-      for x := 0 to 7 do begin
-        col := C.Pixels[posX, PosY];
-        if _findBestColor(col, pal) = 0 then begin
-          v := v or m;
+      if (C1 <> C2) then begin
+        m := $80;
+        Dec(posX, 8);
+        for x := 0 to 7 do begin
+          col := C.Colors[posX, PosY];
+          if _findBestColor(col, pal) = 0 then begin
+            v := v or m;
+          end;
+          m := m shr 1;
+          Inc(posX);
         end;
-        m := m shr 1;
-        Inc(posX);
       end;
       seg.Data[addr] := v;
       Dec(addr);
@@ -376,6 +389,7 @@ begin
   end;
   _emitFooter(seg, addr);
   Segment_slice(seg, addr + 1, $BFFF);
+  FreeAndNil(pal);
   Result := True;
 end;
 

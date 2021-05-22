@@ -20,8 +20,8 @@ interface
 
 uses
   libTools,
-  Classes, SysUtils,
-  Graphics;
+  Classes, SysUtils, fpditherer,
+  FPImage;
 
 const
   PAL_SCANLINES = 604;
@@ -47,7 +47,7 @@ type
 
 var
   //  Palette for 16 color gfx.
-  DAI_PALETTE: array[0..15] of TColor;
+  DAI_PALETTE: TFPPalette;
   DAI_COLORREG: ColorTable;
   FONT: array[0..FONTCHAR_SIZE - 1] of byte;
 
@@ -264,7 +264,7 @@ var
   curLin: integer;
   CW: ControlWord;
   rows, i, k: integer;
-  data1, data2: integer;
+  offset, data1, data2: integer;
   s: string;
   md, cl: string;
   c1, c2: string;
@@ -272,11 +272,12 @@ begin
   Result := False;
   curLin := 0;
   rows := PAL_SCANLINES;
+  offset := $BFFF - curAddr;
   while (curLin < rows) do begin
     if (curAddr < 1) then begin
       exit;
     end;
-    s := Format('%.3d', [curLin div 2]);
+    s := Format('[%.4x][%.3d]', [curAddr + offset, curLin div 2]);
     CW := DAI_decodeControlWord(seg, curAddr);
     if (curAddr < (CW.data_size - 1)) then begin
       exit;
@@ -374,6 +375,14 @@ begin
   Result := True;
 end;
 
+function RGBToColor(const R, G, B: byte): TFPColor;
+begin
+  Result.Red := (R shl 8) + R;
+  Result.Green := (G shl 8) + G;
+  Result.Blue := (B shl 8) + B;
+  Result.Alpha := $FFFF;
+end;
+
 procedure InitColor();
 begin
   DAI_PALETTE[$0] := RGBToColor($00, $00, $00); //  0 Black
@@ -392,6 +401,10 @@ begin
   DAI_PALETTE[$D] := RGBToColor($b3, $ff, $bb); // 13 Light Green
   DAI_PALETTE[$E] := RGBToColor($ff, $ff, $28); // 14 Light Yellow
   DAI_PALETTE[$F] := RGBToColor($ff, $ff, $ff); // 15 White
+end;
+
+procedure InitColorReg();
+begin
   DAI_COLORREG[0] := 0;
   DAI_COLORREG[1] := 0;
   DAI_COLORREG[2] := 0;
@@ -404,6 +417,11 @@ begin
 end;
 
 initialization
+  DAI_PALETTE := TFPPalette.Create(16);
   InitColor();
+  InitColorReg();
   InitFont();
+
+finalization
+  FreeAndNil(DAI_PALETTE);
 end.

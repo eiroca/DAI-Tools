@@ -37,11 +37,15 @@ var
 function FindLoadFilter(const idx: integer): PFilter;
 function FindSaveFilter(const idx: integer): PFilter;
 
+function FindLoadFilter(const Name: string): PFilter;
+function FindSaveFilter(const Name: string): PFilter;
+
 function IndexOfLoadFilter(const Name: string): integer;
 function IndexOfSaveFilter(const Name: string): integer;
 
 procedure ListLoadFilters(const S: TStrings);
 procedure ListSaveFilters(const S: TStrings);
+
 
 var
   LOAD_FILTERS: array of RFilter;
@@ -81,8 +85,11 @@ var
   i: integer;
 begin
   Result := -1;
-  Name:= LowerCase(Name);
-  Name:= StringReplace(Name, '_', ' ', [rfReplaceAll]);
+  if (Name = '') then begin
+    exit;
+  end;
+  Name := LowerCase(Name);
+  Name := StringReplace(Name, '_', ' ', [rfReplaceAll]);
   for i := 0 to High(FILTERS) do begin
     with FILTERS[i] do begin
       if (CompareText(displayName, Name) = 0) then begin
@@ -102,6 +109,16 @@ end;
 function FindSaveFilter(const idx: integer): PFilter;
 begin
   Result := _FindFilter(idx, SAVE_FILTERS);
+end;
+
+function FindLoadFilter(const Name: string): PFilter;
+begin
+  Result := _FindFilter(_IndexOfFilter(Name, LOAD_FILTERS), LOAD_FILTERS);
+end;
+
+function FindSaveFilter(const Name: string): PFilter;
+begin
+  Result := _FindFilter(_IndexOfFilter(Name, SAVE_FILTERS), SAVE_FILTERS);
 end;
 
 function IndexOfLoadFilter(const Name: string): integer;

@@ -20,28 +20,30 @@ interface
 
 uses
   libGraph, libTools,
-  Classes, SysUtils,
-  Graphics;
+  Classes, SysUtils, FPImage;
 
-function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TFPCustomImage): boolean;
 
 implementation
 
-procedure _fastDrawBlockGraph4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
+procedure _fastDrawBlockGraph4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TFPCustomImage); inline;
 var
   j, k, s: integer;
-  col: TColor;
+  col: TFPColor;
   colIdx: integer;
   posX, posY: integer;
 begin
   posY := curScanLine;
+  if (posY + yl >= DAI_SCREEN_LINES) then begin
+    yl := DAI_SCREEN_LINES - posY;
+  end;
   for j := 0 to yl - 1 do begin
     posX := (i * 8) * xl;
     for k := 0 to 7 do begin
       colIdx := (((data1 shr (7 - k)) and $01) shl 1) or ((data2 shr (7 - k)) and $01);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
       for s := 0 to xl - 1 do begin
-        C.Pixels[posX, posY] := col;
+        C.Colors[posX, posY] := col;
         Inc(posX);
       end;
     end;
@@ -50,14 +52,17 @@ begin
 end;
 
 // Skip pixel 4 and 8 to resize to 352 pixel width
-procedure _fastDrawBlockGraph4_528(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
+procedure _fastDrawBlockGraph4_528(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TFPCustomImage); inline;
 var
   j, k: integer;
-  col: TColor;
+  col: TFPColor;
   colIdx: integer;
   posX, posY: integer;
 begin
   posY := curScanLine;
+  if (posY + yl >= DAI_SCREEN_LINES) then begin
+    yl := DAI_SCREEN_LINES - posY;
+  end;
   for j := 0 to yl - 1 do begin
     posX := (i * 6) * xl;
     for k := 0 to 6 do begin
@@ -66,22 +71,25 @@ begin
       end;
       colIdx := (((data1 shr (7 - k)) and $01) shl 1) or ((data2 shr (7 - k)) and $01);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
-      C.Pixels[posX, posY] := col;
+      C.Colors[posX, posY] := col;
       Inc(posX);
     end;
     Inc(posY);
   end;
 end;
 
-procedure _fastDrawBlockText4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
+procedure _fastDrawBlockText4(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TFPCustomImage); inline;
 var
   j, k, s: integer;
-  col: TColor;
+  col: TFPColor;
   charData, colIdx: integer;
   posX, posY, posC: integer;
 begin
   posC := data1 * 16;
   posY := curScanLine;
+  if (posY + yl >= DAI_SCREEN_LINES) then begin
+    yl := DAI_SCREEN_LINES - posY;
+  end;
   for j := 0 to yl - 1 do begin
     posX := (i * 8) * xl;
     charData := FONT[posC];
@@ -90,7 +98,7 @@ begin
       colIdx := ((charData shr k) and $01) or (((data2 shr k) and $01) shl 1);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
       for s := 0 to xl - 1 do begin
-        C.Pixels[posX, posY] := col;
+        C.Colors[posX, posY] := col;
         Inc(posX);
       end;
     end;
@@ -98,15 +106,18 @@ begin
   end;
 end;
 
-procedure _fastDrawBlockText4_528(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
+procedure _fastDrawBlockText4_528(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TFPCustomImage); inline;
 var
   j, k: integer;
-  col: TColor;
+  col: TFPColor;
   charData, colIdx: integer;
   posX, posY, posC: integer;
 begin
   posC := data1 * 16;
   posY := curScanLine;
+  if (posY + yl >= DAI_SCREEN_LINES) then begin
+    yl := DAI_SCREEN_LINES - posY;
+  end;
   for j := 0 to yl - 1 do begin
     posX := (i * 6) * xl;
     charData := FONT[posC];
@@ -114,17 +125,17 @@ begin
     for k := 2 to 7 do begin
       colIdx := ((charData shr k) and $01) or (((data2 shr k) and $01) shl 1);
       col := DAI_PALETTE[DAI_COLORREG[colIdx]];
-      C.Pixels[posX, posY] := col;
+      C.Colors[posX, posY] := col;
       Inc(posX);
     end;
     Inc(posY);
   end;
 end;
 
-procedure _fastDrawBlockGraph16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
+procedure _fastDrawBlockGraph16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TFPCustomImage); inline;
 var
   j, k, s: integer;
-  col: TColor;
+  col: TFPColor;
   colIdx: integer;
   posX, posY: integer;
   c1, c2: integer;
@@ -132,6 +143,9 @@ begin
   posY := curScanLine;
   c1 := data2 and $0F;
   c2 := (data2 shr 4) and $0F;
+  if (posY + yl >= DAI_SCREEN_LINES) then begin
+    yl := DAI_SCREEN_LINES - posY;
+  end;
   for j := 0 to yl - 1 do begin
     posX := (i * 8) * xl;
     for k := 0 to 7 do begin
@@ -143,7 +157,7 @@ begin
       end;
       col := DAI_PALETTE[colIdx];
       for s := 0 to xl - 1 do begin
-        C.Pixels[posX, posY] := col;
+        C.Colors[posX, posY] := col;
         Inc(posX);
       end;
     end;
@@ -151,10 +165,10 @@ begin
   end;
 end;
 
-procedure _fastDrawBlockGraph16_528(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
+procedure _fastDrawBlockGraph16_528(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TFPCustomImage); inline;
 var
   j, k: integer;
-  col: TColor;
+  col: TFPColor;
   colIdx: integer;
   posX, posY: integer;
   c1, c2: integer;
@@ -162,6 +176,9 @@ begin
   posY := curScanLine;
   c1 := data2 and $0F;
   c2 := (data2 shr 4) and $0F;
+  if (posY + yl >= DAI_SCREEN_LINES) then begin
+    yl := DAI_SCREEN_LINES - posY;
+  end;
   for j := 0 to yl - 1 do begin
     posX := (i * 6) * xl;
     for k := 0 to 6 do begin
@@ -175,22 +192,25 @@ begin
         colIdx := c1;
       end;
       col := DAI_PALETTE[colIdx];
-      C.Pixels[posX, posY] := col;
+      C.Colors[posX, posY] := col;
       Inc(posX);
     end;
     Inc(posY);
   end;
 end;
 
-procedure _fastDrawBlockText16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
+procedure _fastDrawBlockText16(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TFPCustomImage); inline;
 var
   j, k, s: integer;
-  col: TColor;
+  col: TFPColor;
   charData, colIdx: integer;
   posX, posY, posC: integer;
   c1, c2: integer;
 begin
   posY := curScanLine;
+  if (posY + yl >= DAI_SCREEN_LINES) then begin
+    yl := DAI_SCREEN_LINES - posY;
+  end;
   posC := data1 * 16;
   c1 := data2 and $0F;
   c2 := (data2 shr 4) and $0F;
@@ -209,7 +229,7 @@ begin
       end;
       col := DAI_PALETTE[colIdx];
       for s := 0 to xl - 1 do begin
-        C.Pixels[posX, posY] := col;
+        C.Colors[posX, posY] := col;
         Inc(posX);
       end;
     end;
@@ -217,15 +237,18 @@ begin
   end;
 end;
 
-procedure _fastDrawBlockText16_528(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TCanvas); inline;
+procedure _fastDrawBlockText16_528(data1, data2: integer; i, curScanLine, xl, yl: integer; C: TFPCustomImage); inline;
 var
   j, k: integer;
-  col: TColor;
+  col: TFPColor;
   charData, colIdx: integer;
   posX, posY, posC: integer;
   c1, c2: integer;
 begin
   posY := curScanLine;
+  if (posY + yl >= DAI_SCREEN_LINES) then begin
+    yl := DAI_SCREEN_LINES - posY;
+  end;
   posC := data1 * 16;
   c1 := data2 and $0F;
   c2 := (data2 shr 4) and $0F;
@@ -243,14 +266,14 @@ begin
         colIdx := c1;
       end;
       col := DAI_PALETTE[colIdx];
-      C.Pixels[posX, posY] := col;
+      C.Colors[posX, posY] := col;
       Inc(posX);
     end;
     Inc(posY);
   end;
 end;
 
-procedure _fastFillColor4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TCanvas);
+procedure _fastFillColor4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TFPCustomImage);
 var
   data1, data2: integer;
   i: integer;
@@ -269,7 +292,7 @@ begin
   end;
 end;
 
-procedure _fastFillText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TCanvas);
+procedure _fastFillText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TFPCustomImage);
 var
   data1, data2: integer;
   i: integer;
@@ -288,7 +311,7 @@ begin
   end;
 end;
 
-procedure _fastDecodeGraph4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TCanvas);
+procedure _fastDecodeGraph4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TFPCustomImage);
 var
   data1, data2: integer;
   i: integer;
@@ -307,7 +330,7 @@ begin
   end;
 end;
 
-procedure _fastDecodeText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TCanvas);
+procedure _fastDecodeText4(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TFPCustomImage);
 var
   data1, data2: integer;
   i: integer;
@@ -326,7 +349,7 @@ begin
   end;
 end;
 
-procedure _fastFillColor16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TCanvas);
+procedure _fastFillColor16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TFPCustomImage);
 var
   data1, data2: integer;
   i: integer;
@@ -345,7 +368,7 @@ begin
   end;
 end;
 
-procedure _fastFillText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TCanvas);
+procedure _fastFillText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TFPCustomImage);
 var
   data1, data2: integer;
   i: integer;
@@ -364,7 +387,7 @@ begin
   end;
 end;
 
-procedure _fastDecodeGraph16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TCanvas);
+procedure _fastDecodeGraph16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TFPCustomImage);
 var
   data1, data2: integer;
   i: integer;
@@ -383,7 +406,7 @@ begin
   end;
 end;
 
-procedure _fastDecodeText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TCanvas);
+procedure _fastDecodeText16(var seg: RSegment; var curAddr: integer; curScanLine, xc, xl, yl: integer; rescale: boolean; C: TFPCustomImage);
 var
   data1, data2: integer;
   i: integer;
@@ -402,7 +425,7 @@ begin
   end;
 end;
 
-function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TCanvas): boolean;
+function DAI_decodeFrameBuffer(var seg: RSegment; curAddr: integer; C: TFPCustomImage): boolean;
 var
   curLin: integer;
   CW: ControlWord;

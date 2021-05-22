@@ -20,7 +20,7 @@ interface
 
 uses
   libTools, bufstream,
-  Classes, SysUtils, Graphics;
+  Classes, SysUtils, FPImage, FPReadPNG, FPWritePNG;
 
 type
   DAI_func = function(const outPath: string; var seg: RSegment): boolean;
@@ -34,6 +34,8 @@ function DAI_loadDAI(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadWAV(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
+
+function DAI_loadPNG(const image: TFPCustomImage; optimize: boolean; var seg: RSegment): boolean;
 
 function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
@@ -252,8 +254,8 @@ end;
 function DAI_savePNG(const outPath: string; var seg: RSegment): boolean;
 var
   curAddr: integer;
-  B: TPortableNetworkGraphic;
-  C: TCanvas;
+  image: TFPCustomImage;
+  writer: TFPCustomImageWriter;
   fbi: RFrameBufferInfo;
 begin
   Result := False;
@@ -269,13 +271,14 @@ begin
   fbi.numCW := 0;
   DAI_infoFrameBuffer(seg, curAddr, fbi);
   seg.entrypoint := curAddr - fbi.sizeVis + 1;
-  B := TPortableNetworkGraphic.Create;
+  image := nil;
+  writer := nil;
   try
-    B.SetSize(DAI_SCREEN_WIDTH, DAI_SCREEN_LINES);
-    C := B.Canvas;
-    if DAI_decodeFrameBuffer(seg, curAddr, C) then begin
+    image := TFPMemoryImage.Create(DAI_SCREEN_WIDTH, DAI_SCREEN_LINES);
+    writer := TFPWriterPNG.Create;
+    if DAI_decodeFrameBuffer(seg, curAddr, image) then begin
       try
-        B.SaveToFile(outPath);
+        image.SaveToFile(outPath, writer);
         Result := True;
         lastError := '';
       except
@@ -289,15 +292,20 @@ begin
       lastError := 'Invalid Frame Buffer';
     end;
   finally
-    B.Free;
+    if (image <> nil) then begin
+      FreeAndNil(image);
+    end;
+    if (writer <> nil) then begin
+      FreeAndNil(writer);
+    end;
   end;
 end;
 
 function DAI_saveFullPNG(const outPath: string; var seg: RSegment): boolean;
 var
   curAddr: integer;
-  B: TPortableNetworkGraphic;
-  C: TCanvas;
+  image: TFPCustomImage;
+  writer: TFPCustomImageWriter;
   fbi: RFrameBufferInfo;
 begin
   Result := False;
@@ -313,13 +321,14 @@ begin
   fbi.numCW := 0;
   DAI_infoFrameBuffer(seg, curAddr, fbi);
   seg.entrypoint := curAddr - fbi.sizeVis + 1;
-  B := TPortableNetworkGraphic.Create;
+  image := nil;
+  writer := nil;
   try
-    B.SetSize(DAI_IMAGE_WIDTH, DAI_IMAGE_LINES);
-    C := B.Canvas;
-    if DAI_decodeFullFrameBuffer(seg, curAddr, C) then begin
+    image := TFPMemoryImage.Create(DAI_SCREEN_WIDTH, DAI_SCREEN_LINES);
+    writer := TFPWriterPNG.Create;
+    if DAI_decodeFullFrameBuffer(seg, curAddr, image) then begin
       try
-        B.SaveToFile(outPath);
+        image.SaveToFile(outPath, writer);
         Result := True;
         lastError := '';
       except
@@ -333,7 +342,12 @@ begin
       lastError := 'Invalid Frame Buffer';
     end;
   finally
-    B.Free;
+    if (image <> nil) then begin
+      FreeAndNil(image);
+    end;
+    if (writer <> nil) then begin
+      FreeAndNil(writer);
+    end;
   end;
 end;
 
@@ -778,56 +792,81 @@ begin
   end;
 end;
 
+function _loadPNG(image: TFPCustomImage; var seg: RSegment; optimize: boolean): boolean;
+begin
+  Result := False;
+  Segment_init(seg, $C000);
+  try
+    if (image.Width <> DAI_SCREEN_WIDTH) or (image.Height <> DAI_SCREEN_LINES) then begin
+      lastError := Format('Image must be (%d,%d)', [DAI_SCREEN_WIDTH, DAI_SCREEN_LINES]);
+      exit;
+    end;
+    if (optimize) then begin
+      if not DAI_createFrameOpt(seg, image) then begin
+        lastError := 'Unable to crate FrameBuffer';
+        exit;
+      end;
+    end
+    else begin
+      if not DAI_createFrame(seg, image) then begin
+        lastError := 'Unable to crate FrameBuffer';
+        exit;
+      end;
+    end;
+    Result := True;
+    lastError := '';
+  except
+    on E: Exception do begin
+      lastError := Format(EXCEPTION_FMT, [E.Message]);
+      exit;
+    end;
+  end;
+end;
+
 function _loadPNG(const inPath: string; var seg: RSegment; optimize: boolean): boolean;
 var
-  B: TPortableNetworkGraphic;
-  C: TCanvas;
+  image: TFPCustomImage;
+  reader: TFPCustomImageReader;
 begin
   Result := False;
   lastError := 'Unable to read ' + inPath;
-  Segment_init(seg, $C000);
-  B := TPortableNetworkGraphic.Create;
+  image := nil;
+  reader := nil;
   try
     try
-      B.LoadFromFile(inPath);
-      if (B.Width <> DAI_SCREEN_WIDTH) or (B.Height <> DAI_SCREEN_LINES) then begin
-        lastError := Format('Image must be (%d,%d)', [DAI_SCREEN_WIDTH, DAI_SCREEN_LINES]);
-        exit;
-      end;
-      C := B.Canvas;
-      if (optimize) then begin
-        if not DAI_createFrameOpt(seg, C) then begin
-          lastError := 'Unable to crate FrameBuffer';
-          exit;
-        end;
-      end
-      else begin
-        if not DAI_createFrame(seg, C) then begin
-          lastError := 'Unable to crate FrameBuffer';
-          exit;
-        end;
-      end;
-      Result := True;
-      lastError := '';
+      image := TFPMemoryImage.Create(0, 0);
+      reader := TFPReaderPNG.Create;
+      image.LoadFromFile(inPath, reader);
     except
       on E: Exception do begin
         lastError := Format(EXCEPTION_FMT, [E.Message]);
         exit;
       end;
     end;
+    Result := _loadPNG(image, seg, optimize);
   finally
-    B.Free;
+    if (image <> nil) then begin
+      FreeAndNil(image);
+    end;
+    if (reader <> nil) then begin
+      FreeAndNil(reader);
+    end;
   end;
+end;
+
+function DAI_loadPNG(const image: TFPCustomImage; optimize: boolean; var seg: RSegment): boolean;
+begin
+  Result := _loadPNG(image, seg, optimize);
 end;
 
 function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
 begin
-  Result := _loadPNG(inPath, seg, True);
+  Result := _loadPNG(inPath, seg, False);
 end;
 
 function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
 begin
-  Result := _loadPNG(inPath, seg, False);
+  Result := _loadPNG(inPath, seg, True);
 end;
 
 function DAI_saveHRFB(const outPath: string; var seg: RSegment): boolean;

@@ -42,12 +42,14 @@ type
     entrypoint: uint16;
     segType: uint16;
     Data: array of byte;
+    info: string;
   end;
 
 procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 procedure Segment_resize(var seg: RSegment; const aSize: integer);
 procedure Segment_slice(var seg: RSegment; const minAddr, maxAddr: integer);
 procedure Segment_writeMetadata(var seg: RSegment; const path: string);
+procedure Segment_split(var seg: RSegment; var odd, even: RSegment);
 function Segment_text(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;
 
 function Dump_detect(const Lines: TStringList): EDumpType;
@@ -70,6 +72,7 @@ const
   N_ENTRYPOINT: UnicodeString = '/EntryPoint';
   N_TYPE: UnicodeString = '/Type';
   N_LENGTH: UnicodeString = '/Length';
+  N_INFO: UnicodeString = '/Info';
 
 procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 begin
@@ -78,6 +81,7 @@ begin
     size := aSize;
     entrypoint := 0;
     segType := 0;
+    info := '';
     SetLength(Data, size);
   end;
 end;
@@ -90,6 +94,30 @@ begin
       SetLength(Data, size);
     end;
   end;
+end;
+
+procedure Segment_split(var seg: RSegment; var odd, even: RSegment);
+var
+  adr, len, pos: integer;
+begin
+  adr := seg.addr;
+  len := seg.size + 1;
+  if not odd(adr) then begin
+    adr := adr + 1;
+    len := len - 1;
+  end;
+  len := len div 2;
+  odd.addr := adr;
+  Segment_resize(odd, len);
+  i := adr;
+  pos := 0;
+  pos:=0;
+  while (pos<len) do begin
+    odd.Data[pos] := seg[adr];
+    Inc(pos);
+    Inc(adr, 2);
+  end;
+
 end;
 
 function Segment_text(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;
@@ -134,17 +162,18 @@ var
   aName: UnicodeString;
 begin
   conf := TJSONConfig.Create(nil);
-  conf.Filename := path;
-  conf.Formatted := True;
-  aName := seg.Name;
-  if (aName = '') then begin
-    aName := 'segment';
-  end;
   try
+    conf.Filename := path;
+    conf.Formatted := True;
+    aName := seg.Name;
+    if (aName = '') then begin
+      aName := 'segment';
+    end;
     conf.SetValue(aName + N_LOADADDR, seg.addr);
     conf.SetValue(aName + N_LENGTH, seg.size);
     conf.SetDeleteValue(aName + N_ENTRYPOINT, seg.entrypoint, 0);
     conf.SetDeleteValue(aName + N_TYPE, seg.segType, 0);
+    conf.SetDeleteValue(aName + N_INFO, seg.info, '');
   finally
     conf.Free;
   end;
@@ -167,13 +196,13 @@ var
   aName: UnicodeString;
 begin
   conf := TJSONConfig.Create(nil);
-  conf.Filename := path;
-  conf.Formatted := True;
-  aName := seg.Name;
-  if (aName = '') then begin
-    aName := 'segment';
-  end;
   try
+    conf.Filename := path;
+    conf.Formatted := True;
+    aName := seg.Name;
+    if (aName = '') then begin
+      aName := 'segment';
+    end;
     with seg do begin
       addr := _readBound(conf, aName + N_LOADADDR, addr, 0, MAX_ADDR);
       entrypoint := _readBound(conf, aName + N_ENTRYPOINT, entrypoint, 0, MAX_ADDR);
