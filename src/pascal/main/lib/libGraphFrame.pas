@@ -203,17 +203,24 @@ var
   tC, C1, C2, c16: integer;
   pal: TFPPalette;
   CW: word;
-  v, m: integer;
+  i, r, v, m: integer;
 begin
   pal := TFPPalette.Create(2);
   posX := 0;
-  CW := DAI_encodeControlWord(2, 2, (h - 1), False, False, 0, 0);
+  r := 2;
+  for i := low(RES_WIDTH) to high(RES_WIDTH) do begin
+    if (RES_WIDTH[i] = lin.w) then begin
+      r := i;
+      break;
+    end;
+  end;
+  CW := DAI_encodeControlWord(r, lin.md, (h - 1), False, False, 0, 0);
   seg.Data[addr] := (CW shr 8) and $FF;
   Dec(addr);
   seg.Data[addr] := CW and $FF;
   Dec(addr);
   blkCol[0] := 0;
-  for xc := 0 to 44 - 1 do begin
+  for xc := 0 to RES_COLS[r] - 1 do begin
     FillByte(blkCol, SizeOf(blkCol), 0);
     for x := 0 to 7 do begin
       c16 := lin.pxl[PosX];
@@ -249,10 +256,14 @@ begin
   FreeAndNil(pal);
 end;
 
+const
+  MAX_DIFFS = 0;
+
 function DAI_createFrameOpt(var seg: RSegment; const C: TFPCustomImage): boolean;
 var
   i, x, y: integer;
   curLin, nxtLin: integer;
+  r, diff: integer;
   col: TFPColor;
   nc, ht, hh, c16: integer;
   addr: integer;
@@ -271,7 +282,7 @@ begin
       w := DAI_SCREEN_WIDTH;
       h := 1;
       colCnt := 0;
-      md := 0;
+      md := %10; // 16 cols graph
       ct := cct;
       FillByte(frq, SizeOf(frq), 0);
       for x := 0 to DAI_SCREEN_WIDTH - 1 do begin
@@ -299,7 +310,44 @@ begin
     end;
     Inc(nxtLin);
   end;
-  // Step 3 -> generate frame buffer
+  // Step 3 -> try to reduce horiz res
+  curLin := 0;
+  while (curLin < (DAI_SCREEN_LINES - 1)) do begin
+    with Screen[curLin] do begin
+      r := 0;
+      for i := 2 downto 0 do begin
+        if RES_WIDTH[i] = w then begin
+          r := i;
+        end;
+      end;
+      if (h > 0) and (colCnt > 1) then begin
+        while (r > 0) do begin
+          diff := 0;
+          x := 0;
+          while (x < w) do begin
+            if pxl[x] <> pxl[x + 1] then begin
+              Inc(diff);
+            end;
+            Inc(x, 2);
+          end;
+          if (diff <= MAX_DIFFS) then begin
+            y := 0;
+            w := w div 2;
+            for x := 0 to w - 1 do begin
+              pxl[x] := pxl[y];
+              Inc(y, 2);
+            end;
+            Dec(r);
+          end
+          else begin
+            break;
+          end;
+        end;
+      end;
+    end;
+    Inc(curLin);
+  end;
+  // Step 4 -> generate frame buffer
   addr := $BFFF;
   curLin := 0;
   while (curLin < (DAI_SCREEN_LINES - 1)) do begin

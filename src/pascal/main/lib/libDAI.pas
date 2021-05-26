@@ -34,6 +34,7 @@ function DAI_loadDAI(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadWAV(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
+function DAI_loadHRFB(const inPath: string; var seg: RSegment): boolean;
 
 function DAI_loadPNG(const image: TFPCustomImage; optimize: boolean; var seg: RSegment): boolean;
 
@@ -867,6 +868,20 @@ end;
 function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
 begin
   Result := _loadPNG(inPath, seg, True);
+end;
+
+function DAI_loadHRFB(const inPath: string; var seg: RSegment): boolean;
+var
+  Lines: TStringList;
+begin
+  Result := False;
+  Lines := TStringList.Create;
+  try
+    Lines.LoadFromFile(inPath);
+    Result := DAI_TextToFrameBuffer(Lines, seg, lastError);
+  finally
+    Lines.Free;
+  end;
 end;
 
 function DAI_saveHRFB(const outPath: string; var seg: RSegment): boolean;

@@ -49,7 +49,7 @@ procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1))
 procedure Segment_resize(var seg: RSegment; const aSize: integer);
 procedure Segment_slice(var seg: RSegment; const minAddr, maxAddr: integer);
 procedure Segment_writeMetadata(var seg: RSegment; const path: string);
-procedure Segment_split(var seg: RSegment; var odd, even: RSegment);
+procedure Segment_split(var seg: RSegment; var oddseg, evenseg: RSegment);
 function Segment_text(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;
 
 function Dump_detect(const Lines: TStringList): EDumpType;
@@ -96,28 +96,40 @@ begin
   end;
 end;
 
-procedure Segment_split(var seg: RSegment; var odd, even: RSegment);
+procedure _copyseg(var srcseg: RSegment; out dstseg: RSegment; offset, step, len: integer);
 var
-  adr, len, pos: integer;
+  adr, pos: integer;
+begin
+  dstseg.addr := srcseg.addr;
+  Segment_resize(dstseg, len);
+  pos := 0;
+  adr := offset;
+  while (pos < len) do begin
+    dstseg.Data[pos] := srcseg.Data[adr];
+    Inc(pos);
+    Inc(adr, step);
+  end;
+end;
+
+procedure Segment_split(var seg: RSegment; var oddseg, evenseg: RSegment);
+var
+  offset, adr, len: integer;
 begin
   adr := seg.addr;
   len := seg.size + 1;
-  if not odd(adr) then begin
-    adr := adr + 1;
-    len := len - 1;
+  if odd(adr) then begin
+    offset := 0;
+  end
+  else begin
+    offset := 1;
   end;
-  len := len div 2;
-  odd.addr := adr;
-  Segment_resize(odd, len);
-  i := adr;
-  pos := 0;
-  pos:=0;
-  while (pos<len) do begin
-    odd.Data[pos] := seg[adr];
-    Inc(pos);
-    Inc(adr, 2);
-  end;
-
+  adr := adr + offset;
+  len := (len - offset) div 2;
+  _copyseg(seg, oddseg, offset, 2, len);
+  offset := 1 - offset;
+  adr := adr + offset;
+  len := (len - offset) div 2;
+  _copyseg(seg, evenseg, offset, 2, len);
 end;
 
 function Segment_text(var seg: RSegment; Lines: TStringList; const headerFmt, prefixFmt, byteFmt, separator: string): boolean;

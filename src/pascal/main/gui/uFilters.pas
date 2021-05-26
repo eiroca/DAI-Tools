@@ -148,6 +148,7 @@ initialization
     newFilter('dump', 'dump', @DAI_loadDump),//
     newFilter('dai', 'DAI', @DAI_loadDAI),//
     newFilter('wav', 'WAV', @DAI_loadWAV),//
+    newFilter('hrfb', 'HRFB', @DAI_loadHRFB),//
     newFilter('png', 'PNG', @DAI_loadPNGOpt),//
     newFilter('png', 'PNG (big)', @DAI_loadPNG)//
     ];

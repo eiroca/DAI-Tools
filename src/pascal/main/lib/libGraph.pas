@@ -90,6 +90,7 @@ function DAI_initFont(const path: string): boolean;
 function DAI_infoFrameBuffer(var seg: RSegment; curAddr: integer; var fbi: RFrameBufferInfo): boolean;
 function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 function DAI_FrameBufferToText(var seg: RSegment; curAddr: integer; L: TStringList): boolean;
+function DAI_TextToFrameBuffer(L: TStringList; out seg: RSegment; out msg: string): boolean;
 
 implementation
 
@@ -259,6 +260,9 @@ begin
   end;
 end;
 
+const
+  FMT_WORD = ' $%1:.2x%0:.2x';
+
 function DAI_FrameBufferToText(var seg: RSegment; curAddr: integer; L: TStringList): boolean;
 var
   curLin: integer;
@@ -266,8 +270,9 @@ var
   rows, i, k: integer;
   offset, data1, data2: integer;
   s: string;
-  md, cl: string;
+  md: string;
   c1, c2: string;
+  palette: boolean;
 begin
   Result := False;
   curLin := 0;
@@ -277,64 +282,64 @@ begin
     if (curAddr < 1) then begin
       exit;
     end;
-    s := Format('[%.4x][%.3d]', [curAddr + offset, curLin div 2]);
+    s := Format('[A:%.4x][L:%.3d]', [curAddr + offset, curLin div 2]);
     CW := DAI_decodeControlWord(seg, curAddr);
     if (curAddr < (CW.data_size - 1)) then begin
       exit;
     end;
+    palette := False;
     if CW.unit_color then begin
       case CW.mode of
         %00: begin
-          md := 'F';
-          cl := '4';
+          md := 'F4';
+          palette := True;
         end;
         %01: begin
-          md := 'R';
-          cl := '4';
+          md := 'R4';
+          palette := True;
         end;
         %10: begin
           md := 'F';
-          cl := 'B';
         end;
         else begin
           md := 'R';
-          cl := 'B';
         end;
       end;
     end
     else begin
       case CW.mode of
         %00: begin
-          md := 'G';
-          cl := '4';
+          md := 'G4';
+          palette := True;
         end;
         %01: begin
-          md := 'T';
-          cl := '4';
+          md := 'T4';
+          palette := True;
         end;
         %10: begin
           md := 'G';
-          cl := 'B';
         end;
         else begin
           md := 'T';
-          cl := 'B';
         end;
       end;
     end;
-    s := s + Format(' %dx%d %s %s', [CW.line_width, CW.line_pxlHei, md, cl]);
     if (CW.enable_change) then begin
-      s := s + Format(' [%x]=%x', [CW.color_reg, CW.color_sel]);
+      DAI_COLORREG[CW.color_reg] := CW.color_sel;
     end;
-    if cl = '4' then begin
-      s := s + Format(' [%x,%x,%x,%x]', [DAI_COLORREG[0], DAI_COLORREG[1], DAI_COLORREG[2], DAI_COLORREG[3]]);
+    if palette then begin
+      s := s + Format('[P:%x,%x,%x,%x]', [DAI_COLORREG[0], DAI_COLORREG[1], DAI_COLORREG[2], DAI_COLORREG[3]]);
+    end;
+    s := s + Format(' %dx%d %s', [CW.line_width, CW.line_pxlHei, md]);
+    if (CW.enable_change) then begin
+      s := s + Format(' P%x=%x', [CW.color_reg, CW.color_sel]);
     end;
     if (md = 'F') or (md = 'R') then begin
       data1 := seg.Data[curAddr];
       Dec(curAddr);
       data2 := seg.Data[curAddr];
       Dec(curAddr);
-      s := s + Format(' %1:.2x%0:.2x', [data1, data2]);
+      s := s + Format(FMT_WORD, [data1, data2]);
     end
     else if (md = 'G') then begin
       for i := 0 to CW.line_colCnt - 1 do begin
@@ -342,7 +347,7 @@ begin
         Dec(curAddr);
         data2 := seg.Data[curAddr];
         Dec(curAddr);
-        if (cl = 'B') then begin
+        if not palette then begin
           s := s + ' ';
           c1 := IntToHex(data2 and $0F, 1);
           c2 := IntToHex((data2 shr 4) and $0F, 1);
@@ -356,7 +361,7 @@ begin
           end;
         end
         else begin
-          s := s + Format(' %1:.2x%0:.2x', [data1, data2]);
+          s := s + Format(FMT_WORD, [data1, data2]);
         end;
       end;
     end
@@ -366,11 +371,70 @@ begin
         Dec(curAddr);
         data2 := seg.Data[curAddr];
         Dec(curAddr);
-        s := s + Format(' %1:.2x%0:.2x', [data1, data2]);
+        s := s + Format(FMT_WORD, [data1, data2]);
       end;
     end;
     L.Add(s);
     Inc(curLin, CW.line_pxlHei * 2);
+  end;
+  Result := True;
+end;
+
+function _getToken(s: string; var pos: longint): string;
+var
+  start, l: integer;
+begin
+  Result := '';
+  l := Length(s);
+  while (pos <= l) do begin
+    if (s[pos] = ' ') or (s[pos] = #9) then begin
+      Inc(pos);
+    end
+    else if (s[pos] = '[') then begin
+      while (s[pos] <> ']') and (pos <= l) do begin
+        Inc(pos);
+      end;
+      Inc(pos);
+    end
+    else begin
+      start := pos;
+      while (s[pos] <> ' ') and (pos <= l) do begin
+        Inc(pos);
+      end;
+      Result := copy(s, start, (pos - start));
+      Break;
+    end;
+  end;
+end;
+
+function DAI_TextToFrameBuffer(L: TStringList; out seg: RSegment; out msg: string): boolean;
+var
+  i: integer;
+  s: string;
+  pos: integer;
+  c: string;
+begin
+  Result := False;
+  msg := '';
+  Segment_init(seg, $C000);
+  for i := 0 to L.Count - 1 do begin
+    s := L[i];
+    pos := 1;
+    c := _getToken(s, pos);
+    if (c = '') then begin
+      msg := 'Wrong Resolution: ' + s;
+      exit;
+    end;
+    c := _getToken(s, pos);
+    if (c = '') then begin
+      msg := 'Wrong Command: ' + s;
+      exit;
+    end;
+    c := _getToken(s, pos);
+    if (c = '') then begin
+      msg := 'Wrong Data: ' + s;
+      exit;
+    end;
   end;
   Result := True;
 end;
