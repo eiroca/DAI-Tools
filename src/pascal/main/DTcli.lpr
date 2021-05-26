@@ -54,7 +54,7 @@ type
     function cmdConvertFrame(const paths: TStrings; const param: string): boolean;
   private
     function getMetadataPath(const outPath: string): string;
-    function getOutPath(const outPath, def: string; force: boolean): string;
+    function getOutPath(const outPath: string; const defPath, defName, defExt: string; force: boolean): string;
   public
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
@@ -66,6 +66,8 @@ const
   OPT_QUANTIZE: ROption = (sName: 'q'; lName: 'quantize'; suffix: '::'; desc: 'quantize[:numer_of_colors]');
   OPT_DITHER: ROption = (sName: 'd'; lName: 'dither'; suffix: ''; desc: 'dither ON/OFF');
   OPT_OPTIMIZE: ROption = (sName: 'z'; lName: 'optimize'; suffix: ''; desc: 'use DAI tricks to reduce the image size');
+  OPT_XOR: ROption = (sName: 'x'; lName: 'xor'; suffix: ''; desc: 'apply xor to frames');
+  OPT_NOTRIM: ROption = (sName: 't'; lName: 'no-trim'; suffix: ''; desc: 'skip trim of common parts');
 
   { TDAIToolCLI }
   procedure TDAIToolCLI.WriteError(const msg: string = '');
@@ -177,20 +179,33 @@ const
     Result := Result + 'metadata.json';
   end;
 
-  function TDAIToolCLI.getOutPath(const outPath, def: string; force: boolean): string;
+  function TDAIToolCLI.getOutPath(const outPath: string; const defPath, defName, defExt: string; force: boolean): string;
   var
     base: string;
     i: integer;
+    filePath, fileName, fileExt: string;
   begin
     if (outPath = '') then begin
-      Result := def;
+      filePath := defPath;
+      fileName := defName;
+      fileExt := '.' + defExt;
+    end
+    else if (outPath[Length(outPath)] = '\') then begin
+      filePath := defPath;
+      fileName := ChangeFileExt(ExtractFileName(outPath), '');
+      fileExt := ExtractFileExt(outPath);
     end
     else begin
-      Result := outPath;
+      filePath := ExtractFilePath(outPath);
+      fileName := ChangeFileExt(ExtractFileName(outPath), '');
+      fileExt := ExtractFileExt(outPath);
+      if (fileExt = '') then begin
+        fileExt := '.' + defExt;
+      end;
     end;
-    base := ExtractFilePath(Result) + ChangeFileExt(ExtractFileName(Result), '') + '.%.3d' + ExtractFileExt(Result);
+    base := filePath + fileName + '.%.3d' + fileExt;
     if not force then begin
-      Result := ExtractFilePath(Result) + ChangeFileExt(ExtractFileName(Result), '') + ExtractFileExt(Result);
+      Result := filePath + fileName + fileExt;
     end;
     for i := 0 to 999 do begin
       if (i <> 0) or force then begin
@@ -251,6 +266,7 @@ const
     if (outType < 0) then begin
       exit;
     end;
+    saveFilter := FindSaveFilter(outType);
     inType := IndexOfLoadFilter(GetOptionValue(OPT_INTYPE.sName, OPT_INTYPE.lName));
     outPath := _get(OPT_OUTPUT);
     for i := 0 to paths.Count - 1 do begin
@@ -266,9 +282,8 @@ const
         end;
       end;
       loadFilter := FindLoadFilter(inType);
-      saveFilter := FindSaveFilter(outType);
-      outName := getOutPath(outPath, ChangeFileExt(inPath, '.' + saveFilter^.ext), paths.Count > 1);
-      Write('Converting ' + inPath + ' [' + loadFilter^.displayName + '] to ' + outName + ' [' + saveFilter^.displayName + ']: ');
+      outName := getOutPath(outPath, ExtractFilePath(inPath), ChangeFileExt(ExtractFileName(inPath), ''), saveFilter^.ext, paths.Count > 1);
+      WriteLn('Converting ' + inPath + ' to ' + outName);
       s.size := 0;
       s.Name := ChangeFileExt(ExtractFileName(outName), '');
       Result := loadFilter^.proc(inPath, s);
@@ -305,15 +320,15 @@ const
     if (outType < 0) then begin
       exit;
     end;
+    saveFilter := FindSaveFilter(outType);
     outPath := _get(OPT_OUTPUT);
     optimize := _has(OPT_OPTIMIZE);
     dither := _has(OPT_DITHER);
     quantize := _getInt(OPT_QUANTIZE, 256, 0);
     for i := 0 to paths.Count - 1 do begin
       inPath := paths[i];
-      saveFilter := FindSaveFilter(outType);
-      outName := getOutPath(outPath, ChangeFileExt(inPath, '.' + saveFilter^.ext), paths.Count > 1);
-      Write('Converting ' + inPath + ' to ' + outName + ' [' + saveFilter^.displayName + ']: ');
+      outName := getOutPath(outPath, ExtractFilePath(inPath), ChangeFileExt(ExtractFileName(inPath), ''), saveFilter^.ext, paths.Count > 1);
+      WriteLn('Converting ' + inPath + ' to ' + outName);
       s.size := 0;
       s.Name := ChangeFileExt(ExtractFileName(outName), '');
       image := nil;
@@ -329,19 +344,83 @@ const
           Writeln(DAI_lastError());
           Exit;
         end;
+        Segment_writeMetadata(s, getMetadataPath(outPath));
       finally
         if (image <> nil) then begin
           FreeAndNil(image);
         end;
       end;
-      Segment_writeMetadata(s, getMetadataPath(outPath));
     end;
     Result := True;
   end;
 
   function TDAIToolCLI.cmdConvertFrame(const paths: TStrings; const param: string): boolean;
+  var
+    outPath: string;
+    outType: integer;
+    doXor, skipTrim: boolean;
+    outName: string;
+    saveFilter: PFilter;
+    s: array[0..1] of RSegment;
+    res: RSegment;
+    dst: PSegment;
+    idx: integer;
+    sa, ea: integer;
+    image: TFPCustomImage;
+    i: integer;
+    inPath: string;
   begin
     Result := False;
+    outType := _getOutType(param);
+    if (outType < 0) then begin
+      exit;
+    end;
+    saveFilter := FindSaveFilter(outType);
+    outPath := _get(OPT_OUTPUT);
+    doXor := _has(OPT_XOR);
+    skipTrim := _has(OPT_NOTRIM);
+    idx := 0;
+    for i := 0 to paths.Count - 1 do begin
+      inPath := paths[i];
+      outName := getOutPath(outPath, ExtractFilePath(inPath), ChangeFileExt(ExtractFileName(inPath), ''), saveFilter^.ext, paths.Count > 1);
+      WriteLn('Frame ', i: 4, '<-', inPath);
+      image := nil;
+      try
+        dst := @s[idx];
+        dst^.size := 0;
+        dst^.Name := ChangeFileExt(ExtractFileName(outName), '');
+        Result := DAI_loadBIN(inPath, dst^);
+        if not Result then begin
+          Writeln(DAI_lastError());
+          Exit;
+        end;
+        if (i <> 0) then begin
+          dst := @res;
+          if (doXor) then begin
+            Segment_xor(s[1 - idx], s[idx], res);
+          end
+          else begin
+            Segment_copy(s[idx], res);
+          end;
+          if not skipTrim then begin
+            Segment_diff(s[1 - idx], s[idx], sa, ea);
+            Segment_slice(res, sa, ea);
+          end;
+        end;
+        Result := saveFilter^.proc(outName, dst^);
+        Segment_writeMetadata(dst^, getMetadataPath(outPath));
+        if not Result then begin
+          Writeln(DAI_lastError());
+          Exit;
+        end;
+        idx := 1 - idx;
+      finally
+        if (image <> nil) then begin
+          FreeAndNil(image);
+        end;
+      end;
+    end;
+    Result := True;
   end;
 
   constructor TDAIToolCLI.Create(TheOwner: TComponent);
@@ -376,8 +455,10 @@ const
       suffix := ':';
       desc := 'generated a delta sequence';
       call := @cmdConvertFrame;
-      SetLength(opts, 1);
+      SetLength(opts, 3);
       opts[0] := OPT_OUTPUT;
+      opts[1] := OPT_XOR;
+      opts[2] := OPT_NOTRIM;
     end;
     with CMDS[3] do begin
       sName := 'h';
@@ -414,7 +495,7 @@ const
       end;
       WriteLn();
       with CMDS[i] do begin
-        Writeln('  Command: --', lName, ' ',desc);
+        Writeln('  Command: --', lName, ' ', desc);
         for j := low(opts) to high(opts) do begin
           Write(' ');
           if (suffix <> '') then begin

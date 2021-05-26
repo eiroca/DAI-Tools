@@ -35,6 +35,8 @@ type
     dMAME// Example line: 'BFF0 00:  00 B8 36 00 00 AF 36 00 00 9F 36 00 00 80 36 ................'
     );
 
+  PSegment = ^RSegment;
+
   RSegment = record
     Name: string;
     size: uint32;
@@ -47,6 +49,9 @@ type
 
 procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 procedure Segment_resize(var seg: RSegment; const aSize: integer);
+procedure Segment_copy(const src: RSegment; out dst: RSegment);
+procedure Segment_xor(const srcA, srcB: RSegment; out dst: RSegment);
+procedure Segment_diff(const srcA, srcB: RSegment; out sPos, ePos: integer);
 procedure Segment_slice(var seg: RSegment; const minAddr, maxAddr: integer);
 procedure Segment_writeMetadata(var seg: RSegment; const path: string);
 procedure Segment_split(var seg: RSegment; var oddseg, evenseg: RSegment);
@@ -69,6 +74,7 @@ const
 
 const
   N_LOADADDR: UnicodeString = '/LoadAddress';
+  N_ENDADDR: UnicodeString = '/LastAddress';
   N_ENTRYPOINT: UnicodeString = '/EntryPoint';
   N_TYPE: UnicodeString = '/Type';
   N_LENGTH: UnicodeString = '/Length';
@@ -161,6 +167,44 @@ begin
   end;
 end;
 
+procedure Segment_copy(const src: RSegment; out dst: RSegment);
+begin
+  dst := src;
+end;
+
+procedure Segment_xor(const srcA, srcB: RSegment; out dst: RSegment);
+var
+  i, len: integer;
+begin
+  len := Min(srcA.size, srcB.size);
+  Segment_init(dst, len);
+  dst.addr := srcA.addr;
+  for i := 0 to len - 1 do begin
+    dst.Data[i] := srcA.Data[i] xor srcB.Data[i];
+  end;
+end;
+
+procedure Segment_diff(const srcA, srcB: RSegment; out sPos, ePos: integer);
+var
+  i, len: integer;
+begin
+  len := Min(srcA.size, srcB.size);
+  sPos := 0;
+  for i := 0 to len - 1 do begin
+    if (srcA.Data[i] <> srcB.Data[i]) then begin
+      sPos := i;
+      break;
+    end;
+  end;
+  ePos := sPos;
+  for i := len - 1 downto sPos + 1 do begin
+    if (srcA.Data[i] <> srcB.Data[i]) then begin
+      ePos := i;
+      break;
+    end;
+  end;
+end;
+
 procedure Segment_slice(var seg: RSegment; const minAddr, maxAddr: integer);
 begin
   seg.addr := minAddr;
@@ -172,6 +216,7 @@ procedure Segment_writeMetadata(var seg: RSegment; const path: string);
 var
   conf: TJsonConfig;
   aName: UnicodeString;
+  sa, ea: integer;
 begin
   conf := TJSONConfig.Create(nil);
   try
@@ -181,8 +226,11 @@ begin
     if (aName = '') then begin
       aName := 'segment';
     end;
-    conf.SetValue(aName + N_LOADADDR, seg.addr);
-    conf.SetValue(aName + N_LENGTH, seg.size);
+    sa := seg.addr;
+    ea := seg.addr + seg.size;
+    conf.SetDeleteValue(aName + N_LOADADDR, sa,0);
+    conf.SetDeleteValue(aName + N_ENDADDR, ea,0);
+    conf.SetDeleteValue(aName + N_LENGTH, seg.size,0);
     conf.SetDeleteValue(aName + N_ENTRYPOINT, seg.entrypoint, 0);
     conf.SetDeleteValue(aName + N_TYPE, seg.segType, 0);
     conf.SetDeleteValue(aName + N_INFO, seg.info, '');
