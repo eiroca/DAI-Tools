@@ -20,8 +20,7 @@ interface
 
 uses
   libTools,
-  Classes, SysUtils, fpditherer,
-  FPImage;
+  Classes, SysUtils, StrUtils, FPImage;
 
 const
   PAL_SCANLINES = 604;
@@ -29,6 +28,7 @@ const
 
   DAI_SCREEN_WIDTH = 352;
   DAI_SCREEN_LINES = PAL_SCANLINES_VISIBLE div 2;
+  DAI_SCAN_LINES = PAL_SCANLINES div 2;
 
   DAI_IMAGE_WIDTH = DAI_SCREEN_WIDTH * 3;
   DAI_IMAGE_LINES = PAL_SCANLINES div 2 * 3;
@@ -88,11 +88,23 @@ type
 
 function DAI_initFont(const path: string): boolean;
 function DAI_infoFrameBuffer(var seg: RSegment; curAddr: integer; var fbi: RFrameBufferInfo): boolean;
+function DAI_encodeControlWord(resolution: integer; mode: integer; repLines: integer; enable_change: boolean; unit_color: boolean; color_reg: integer; color_sel: integer): word;
 function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 function DAI_FrameBufferToText(var seg: RSegment; curAddr: integer; L: TStringList): boolean;
 function DAI_TextToFrameBuffer(L: TStringList; out seg: RSegment; out msg: string): boolean;
 
 implementation
+
+const
+  ENABLE_CHANGE_val: array [boolean] of integer = (0, $80);
+  UNIT_COLOR_val: array [boolean] of integer = ($40, 0);
+  BOOL2INT: array[boolean] of integer = (0, 1);
+
+
+function DAI_encodeControlWord(resolution: integer; mode: integer; repLines: integer; enable_change: boolean; unit_color: boolean; color_reg: integer; color_sel: integer): word;
+begin
+  Result := mode shl 14 + resolution shl 12 + repLines shl 8 + ENABLE_CHANGE_val[enable_change] + UNIT_COLOR_val[unit_color] + color_sel shl 4 + color_reg;
+end;
 
 function DAI_decodeControlWord(var seg: RSegment; var curAddr: integer): ControlWord;
 var
@@ -382,7 +394,7 @@ end;
 
 function _getToken(s: string; var pos: longint): string;
 var
-  start, l: integer;
+  start, off, l: integer;
 begin
   Result := '';
   l := Length(s);
@@ -398,44 +410,193 @@ begin
     end
     else begin
       start := pos;
-      while (s[pos] <> ' ') and (pos <= l) do begin
+      Inc(pos);
+      off := 1;
+      while (pos <= l) do begin
+        if (s[pos] = ' ') then begin
+          off := 0;
+          break;
+        end;
         Inc(pos);
       end;
-      Result := copy(s, start, (pos - start));
+      Result := copy(s, start, (pos - start + off));
       Break;
     end;
   end;
 end;
 
+function _getWord(s: string; var pos: longint; out w: integer): boolean;
+var
+  t: string;
+  c: char;
+  v, r, v1, v2: integer;
+  bit: boolean;
+  i: integer;
+begin
+  w := -1;
+  t := _getToken(s, pos);
+  if (t <> '') then begin
+    try
+      v1 := -1;
+      v2 := -1;
+      if length(t) = 8 then begin
+        r := 0;
+        for i := 1 to 8 do begin
+          c := t[i];
+          v := Hex2Dec(c);
+          if (v1 = -1) or (v = v1) then begin
+            v1 := v;
+            bit := true;
+          end
+          else if (v2 = -1) or (v = v2) then begin
+            v2 := v;
+            bit := false;
+          end
+          else begin
+            break;
+          end;
+          r := r shl 1 + BOOL2INT[bit];
+        end;
+        if (v2 = -1) then begin
+          v2 := v1;
+        end;
+        if (v2 < v1) then begin
+          r := r xor $FF;
+          i := v1;
+          v1 := v2;
+          v2 := i;
+        end;
+        w := v1 shl 4 + v2 + r shl 8;
+      end
+      else if (t[1] = '$') then begin
+        w := Hex2Dec(copy(t, 2, length(t) - 1));
+      end
+      else begin
+        w := StrToInt(t);
+      end;
+    except
+      on E: EConvertError do ;
+    end;
+  end;
+  Result := (w >= $0000) and (w <= $FFFF);
+end;
+
+procedure _writeWord(var seg: RSegment; var addr: integer; const w: word);
+begin
+  seg.Data[addr] := (w shr 8) and $FF;
+  Dec(addr);
+  seg.Data[addr] := w and $FF;
+  Dec(addr);
+end;
+
 function DAI_TextToFrameBuffer(L: TStringList; out seg: RSegment; out msg: string): boolean;
 var
-  i: integer;
+  i, j: integer;
+  x, y: integer;
   s: string;
-  pos: integer;
-  c: string;
+  curPos: integer;
+  sepPos: integer;
+  t: string;
+  r, m: integer;
+  w, h, c: integer;
+  cw: word;
+  addr: integer;
+  palette, Text, fill: boolean;
 begin
   Result := False;
   msg := '';
   Segment_init(seg, $C000);
+  addr := $BFFF;
+  y := 0;
   for i := 0 to L.Count - 1 do begin
     s := L[i];
-    pos := 1;
-    c := _getToken(s, pos);
-    if (c = '') then begin
+    if s = '' then begin
+      continue;
+    end;
+    if (s[1] = ';') or (s[1] = '#') then begin
+      continue;
+    end;
+    Inc(y);
+    if (y > DAI_SCAN_LINES) then begin
+      msg := 'Too much scanlines';
+      exit;
+    end;
+    curPos := 1;
+    t := _getToken(s, curPos);
+    if (t = '') then begin
       msg := 'Wrong Resolution: ' + s;
       exit;
     end;
-    c := _getToken(s, pos);
-    if (c = '') then begin
+    sepPos := Pos('x', t);
+    if (sepPos < 2) then begin
+      msg := 'Wrong Resolution: ' + s;
+      exit;
+    end;
+    w := StrToIntDef(Copy(t, 1, sepPos - 1), -1);
+    h := StrToIntDef(Copy(t, sepPos + 1, length(t) - sepPos), -1);
+    r := -1;
+    for j := Low(RES_WIDTH) to High(RES_WIDTH) do begin
+      if (w = RES_WIDTH[j]) then begin
+        r := j;
+        break;
+      end;
+    end;
+    if (h < 1) or (h > 16) or (r = -1) then begin
+      msg := 'Wrong Resolution: ' + s;
+      exit;
+    end;
+    t := _getToken(s, curPos);
+    if (t = '') or (Length(t) > 2) then begin
       msg := 'Wrong Command: ' + s;
       exit;
     end;
-    c := _getToken(s, pos);
-    if (c = '') then begin
-      msg := 'Wrong Data: ' + s;
+    c := Pos(t, 'FRGT');
+    if (c = 0) then begin
+      msg := 'Wrong Command: ' + s;
       exit;
     end;
+    palette := length(t) = 2;
+    fill := (c = 1) or (c = 2);
+    Text := (c = 2) or (c = 4);
+    m := BOOL2INT[not Text] * 2 + BOOL2INT[palette];
+    cw := DAI_encodeControlWord(r, m, h - 1, False, fill, 0, 0);
+    _writeWord(seg, addr, cw);
+    case c of
+      1: begin // F
+        if not _getWord(s, curPos, w) then begin
+          msg := 'Wrong Data: ' + s;
+          exit;
+        end;
+        _writeWord(seg, addr, w);
+      end;
+      2: begin // R
+        if not _getWord(s, curPos, w) then begin
+          msg := 'Wrong Data: ' + s;
+          exit;
+        end;
+        _writeWord(seg, addr, w);
+      end;
+      3: begin // G
+        for x := 1 to RES_COLS[r] do begin
+          if not _getWord(s, curPos, w) then begin
+            msg := 'Wrong Data: ' + s;
+            exit;
+          end;
+          _writeWord(seg, addr, w);
+        end;
+      end;
+      else begin // T
+        for x := 1 to RES_COLS[r] do begin
+          if not _getWord(s, curPos, w) then begin
+            msg := 'Wrong Data: ' + s;
+            exit;
+          end;
+          _writeWord(seg, addr, w);
+        end;
+      end;
+    end;
   end;
+  Segment_slice(seg, addr, $BFFF);
   Result := True;
 end;
 

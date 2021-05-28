@@ -27,10 +27,6 @@ function DAI_createFrameOpt(var seg: RSegment; const C: TFPCustomImage): boolean
 
 implementation
 
-const
-  ENABLE_CHANGE_val: array [boolean] of integer = (0, $80);
-  UNIT_COLOR_val: array [boolean] of integer = ($40, 0);
-
 type
   RColArr = array[0..15] of integer;
   RPxlArr = array[0..DAI_SCREEN_WIDTH - 1] of byte;
@@ -47,12 +43,7 @@ type
     pxl: RPxlArr;
   end;
 
-  RScreen = array[0..DAI_SCREEN_LINES - 1] of RRowDef;
-
-function DAI_encodeControlWord(resolution: integer; mode: integer; repLines: integer; enable_change: boolean; unit_color: boolean; color_reg: integer; color_sel: integer): word;
-begin
-  Result := mode shl 14 + resolution shl 12 + repLines shl 8 + ENABLE_CHANGE_val[enable_change] + UNIT_COLOR_val[unit_color] + color_sel shl 4 + color_reg;
-end;
+  RScreen = array[0..DAI_SCAN_LINES - 1] of RRowDef;
 
 procedure _findColorPair(freq: RColArr; out C1, C2: integer);
 var

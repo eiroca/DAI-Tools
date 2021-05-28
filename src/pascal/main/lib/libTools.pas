@@ -47,7 +47,7 @@ type
     info: string;
   end;
 
-procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
+procedure Segment_init(out seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 procedure Segment_resize(var seg: RSegment; const aSize: integer);
 procedure Segment_copy(const src: RSegment; out dst: RSegment);
 procedure Segment_xor(const srcA, srcB: RSegment; out dst: RSegment);
@@ -80,7 +80,7 @@ const
   N_LENGTH: UnicodeString = '/Length';
   N_INFO: UnicodeString = '/Info';
 
-procedure Segment_init(var seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
+procedure Segment_init(out seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 begin
   with seg do begin
     addr := 0;
@@ -228,9 +228,9 @@ begin
     end;
     sa := seg.addr;
     ea := seg.addr + seg.size;
-    conf.SetDeleteValue(aName + N_LOADADDR, sa,0);
-    conf.SetDeleteValue(aName + N_ENDADDR, ea,0);
-    conf.SetDeleteValue(aName + N_LENGTH, seg.size,0);
+    conf.SetDeleteValue(aName + N_LOADADDR, sa, 0);
+    conf.SetDeleteValue(aName + N_ENDADDR, ea, 0);
+    conf.SetDeleteValue(aName + N_LENGTH, seg.size, 0);
     conf.SetDeleteValue(aName + N_ENTRYPOINT, seg.entrypoint, 0);
     conf.SetDeleteValue(aName + N_TYPE, seg.segType, 0);
     conf.SetDeleteValue(aName + N_INFO, seg.info, '');

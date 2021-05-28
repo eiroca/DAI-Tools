@@ -47,7 +47,7 @@ var
   quantizer: TFPOctreeQuantizer;
   palette: TFPPalette;
   srcI, dstI: TFPCustomImage;
-  change:boolean;
+  change: boolean;
 begin
   Result := nil;
   image1 := nil;
@@ -58,7 +58,7 @@ begin
   quantizer := nil;
   palette := nil;
   canvas := nil;
-  change:= false;
+  change := False;
   try
     // Step 1 - Read image
     image2 := TFPMemoryImage.Create(DAI_SCREEN_WIDTH, DAI_SCREEN_LINES);
@@ -73,7 +73,7 @@ begin
       canvas.StretchDraw(0, 0, DAI_SCREEN_WIDTH - 1, DAI_SCREEN_LINES - 1, image1);
       srcI := image2;
       dstI := image1;
-      change:= true;
+      change := True;
     end;
     // Step 3 - Color quantization
     if (quCol > 0) then begin
@@ -85,7 +85,7 @@ begin
       dither1.UseAlpha := False;
       dither1.Dither(srcI, dstI);
       Swap(srcI, dstI);
-      change:= true;
+      change := True;
     end;
     // Step 4 - Dithering
     if (dither) then begin
@@ -93,7 +93,7 @@ begin
       dither2.UseAlpha := False;
       dither2.Dither(srcI, dstI);
       Swap(srcI, dstI);
-      change:= true;
+      change := True;
     end;
     if (not change) or (dstI = image1) then begin
       Result := image1;

@@ -134,7 +134,12 @@ const
         inDir := ExtractFileDir(inPath);
         if FindFirst(inPath, faAnyFile and not faDirectory, SR) = 0 then begin
           repeat
-            path := inDir + '\' + SR.Name;
+            if (inDir <> '') then begin
+              path := inDir + '\' + SR.Name;
+            end
+            else begin
+              path := SR.Name;
+            end;
             paths.Add(path);
           until FindNext(SR) <> 0;
           findclose(SR);
@@ -191,17 +196,15 @@ const
       fileExt := '.' + defExt;
     end
     else if (outPath[Length(outPath)] = '\') then begin
-      filePath := defPath;
-      fileName := ChangeFileExt(ExtractFileName(outPath), '');
-      fileExt := ExtractFileExt(outPath);
+      filePath := outPath;
+      fileName := defName;
+      fileExt := '.' + defExt;
+      force := False;
     end
     else begin
       filePath := ExtractFilePath(outPath);
       fileName := ChangeFileExt(ExtractFileName(outPath), '');
       fileExt := ExtractFileExt(outPath);
-      if (fileExt = '') then begin
-        fileExt := '.' + defExt;
-      end;
     end;
     base := filePath + fileName + '.%.3d' + fileExt;
     if not force then begin
@@ -383,7 +386,7 @@ const
     for i := 0 to paths.Count - 1 do begin
       inPath := paths[i];
       outName := getOutPath(outPath, ExtractFilePath(inPath), ChangeFileExt(ExtractFileName(inPath), ''), saveFilter^.ext, paths.Count > 1);
-      WriteLn('Frame ', i: 4, '<-', inPath);
+      WriteLn('Frame ', i: 4, '-', inPath);
       image := nil;
       try
         dst := @s[idx];
