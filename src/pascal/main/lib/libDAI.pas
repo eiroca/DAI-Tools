@@ -878,7 +878,12 @@ begin
   Lines := TStringList.Create;
   try
     Lines.LoadFromFile(inPath);
-    Result := DAI_TextToFrameBuffer(Lines, seg, lastError);
+    if (Lines.Count > 0) then begin
+      Result := DAI_TextToFrameBuffer(Lines, seg, lastError);
+    end
+    else begin
+      lastError := 'Invalid path: ' + inPath;
+    end;
   finally
     Lines.Free;
   end;

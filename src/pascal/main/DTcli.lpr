@@ -281,6 +281,7 @@ const
         end;
         inType := IndexOfLoadFilter(ext);
         if (inType < 0) then begin
+          Result := False;
           Exit;
         end;
       end;
@@ -301,7 +302,7 @@ const
       end;
       Segment_writeMetadata(s, getMetadataPath(outPath));
     end;
-    Result := True;
+    Result := paths.Count > 0;
   end;
 
   function TDAIToolCLI.cmdConvertGraphic(const paths: TStrings; const param: string): boolean;

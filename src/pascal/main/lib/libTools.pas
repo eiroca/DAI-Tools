@@ -227,7 +227,7 @@ begin
       aName := 'segment';
     end;
     sa := seg.addr;
-    ea := seg.addr + seg.size;
+    ea := seg.addr + seg.size - 1;
     conf.SetDeleteValue(aName + N_LOADADDR, sa, 0);
     conf.SetDeleteValue(aName + N_ENDADDR, ea, 0);
     conf.SetDeleteValue(aName + N_LENGTH, seg.size, 0);
