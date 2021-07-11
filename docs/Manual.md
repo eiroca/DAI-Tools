@@ -39,21 +39,37 @@ The status of the conversion will be displayed in the bottom of the window.
 
 ```
 Usage:
-  HELP -> DTcli.exe -h
-  CONVERT -> DTcli.exe inputfile --convert-to save_type [--input-type load_type] [--output outputfile]
+  DTcli.exe [-h|--help]
+  DTcli.exe [-c|--convert-file] save_type [options] inputfile1 [inoutfile2 [...]]
+  DTcli.exe [-g|--convert-graphic] save_type [options] inputfile1 [inoutfile2 [...]]
+  DTcli.exe [-f|--convert-frame] save_type [options] inputfile1 [inoutfile2 [...]]
 
--o --output (if missing is input file with extension changed)
+  Command: --convert-file convert between DAI file formats
+ [-o|--output] output file name (if missing is input file with extension changed)
+ [-t|--input-type] input file type (if missing is input file extension)
 
--t --input-file (if missing is input file extension)
+  Command: --convert-graphic convert a PNG in different DAI file formats
+ [-o|--output] output file name (if missing is input file with extension changed)
+ [-q|--quantize] quantize[:numer_of_colors]
+ [-d|--dither] dither ON/OFF
+ [-z|--optimize] use DAI tricks to reduce the image size
+
+  Command: --convert-frame generated a delta sequence
+ [-o|--output] output file name (if missing is input file with extension changed)
+ [-x|--xor] apply xor to frames
+ [-t|--no-trim] skip trim of common parts
+
+Input types allowed:
   bin -> BIN
   sbin -> SBIN
   dump -> dump
   dai -> DAI
   wav -> WAV
+  hrfb -> HRFB
   png -> PNG
   png -> PNG_(big)
 
--c --convert-to
+Output types allowed:
   BIN -> bin
   SBIN -> sbin
   dump -> dump

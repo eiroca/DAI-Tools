@@ -76,7 +76,7 @@ begin
   end;
 end;
 
-procedure RedGreenBlue(const col: TFPColor; var R, G, B: byte); inline;
+procedure RedGreenBlue(const col: TFPColor; out R, G, B: byte); inline;
 begin
   R := col.Red shr 8;
   G := col.Green shr 8;

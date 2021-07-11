@@ -447,7 +447,7 @@ const
       desc := 'convert a PNG in different DAI file formats';
       suffix := ':';
       call := @cmdConvertGraphic;
-      SetLength(opts, 5);
+      SetLength(opts, 4);
       opts[0] := OPT_OUTPUT;
       opts[1] := OPT_QUANTIZE;
       opts[2] := OPT_DITHER;
@@ -533,7 +533,7 @@ var
   Application: TDAIToolCLI;
 begin
   Application := TDAIToolCLI.Create(nil);
-  Application.Title := 'DAI tools CLI';
+  Application.Title:='DAI tools CLI';
   Application.Run;
   Application.Free;
 end.
