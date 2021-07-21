@@ -50,6 +50,7 @@ type
 procedure Segment_init(out seg: RSegment; const aSize: integer = (MAX_ADDR + 1));
 procedure Segment_resize(var seg: RSegment; const aSize: integer);
 procedure Segment_copy(const src: RSegment; out dst: RSegment);
+procedure Segment_copyRange(const src: RSegment; out dst: RSegment; const addr, len: integer);
 procedure Segment_xor(const srcA, srcB: RSegment; out dst: RSegment);
 procedure Segment_diff(const srcA, srcB: RSegment; out sPos, ePos: integer);
 procedure Segment_slice(var seg: RSegment; const minAddr, maxAddr: integer);
@@ -170,6 +171,12 @@ end;
 procedure Segment_copy(const src: RSegment; out dst: RSegment);
 begin
   dst := src;
+end;
+
+procedure Segment_copyRange(const src: RSegment; out dst: RSegment; const addr, len: integer);
+begin
+  dst := src;
+  Segment_slice(dst, addr, addr + len);
 end;
 
 procedure Segment_xor(const srcA, srcB: RSegment; out dst: RSegment);

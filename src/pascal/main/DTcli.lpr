@@ -63,7 +63,7 @@ type
 const
   OPT_OUTPUT: ROption = (sName: 'o'; lName: 'output'; suffix: ':'; desc: 'output file name (if missing is input file with extension changed)');
   OPT_INTYPE: ROption = (sName: 't'; lName: 'input-type'; suffix: ':'; desc: 'input file type (if missing is input file extension)');
-  OPT_QUANTIZE: ROption = (sName: 'q'; lName: 'quantize'; suffix: '::'; desc: 'quantize[:numer_of_colors]');
+  OPT_QUANTIZE: ROption = (sName: 'q'; lName: 'quantize'; suffix: '::'; desc: 'quantize[ numer_of_colors]');
   OPT_DITHER: ROption = (sName: 'd'; lName: 'dither'; suffix: ''; desc: 'dither ON/OFF');
   OPT_OPTIMIZE: ROption = (sName: 'z'; lName: 'optimize'; suffix: ''; desc: 'use DAI tricks to reduce the image size');
   OPT_XOR: ROption = (sName: 'x'; lName: 'xor'; suffix: ''; desc: 'apply xor to frames');

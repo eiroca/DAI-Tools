@@ -162,6 +162,7 @@ initialization
     newFilter('hrfb', 'HRFB', @DAI_saveHRFB),//
     newFilter('dai', 'DAI (bin)', @DAI_saveDAIbin),//
     newFilter('dai', 'DAI (basic)', @DAI_saveDAIbas),//
+    newFilter('bas', 'BAS', @DAI_saveBAS),//
     newFilter('wav', 'WAV', @DAI_saveWAV)//
     ];
 end.

@@ -49,13 +49,16 @@ function DAI_saveDAIbas(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveWAV(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveHRFB(const outPath: string; var seg: RSegment): boolean;
 
+function DAI_saveBAS(const outPath: string; var seg: RSegment): boolean;
+
 implementation
 
 uses
-  libGraph, libGraphFast, libGraphFull, libGraphFrame, libAudio;
+  libGraph, libGraphFast, libGraphFull, libGraphFrame, libAudio, libBASIC;
 
 const
   EXCEPTION_FMT = 'Exception: %s';
+  BASICERR_FMT = 'BASIC error: %d';
   ERR_INVALIDSEGMENT = 'Invalid segment';
 
 threadvar
@@ -455,7 +458,7 @@ begin
   try
     try
       // File Type = 30H for Basic
-      fs.WriteByte($30);
+      fs.WriteByte(BASIC_TAPEHEADER);
       // Name Length
       cs := 86;
       _writeByte(fs, 0, cs);
@@ -923,5 +926,67 @@ begin
     Lines.Free;
   end;
 end;
+
+function DAI_saveBAS(const outPath: string; var seg: RSegment): boolean;
+var
+  codeStart, codeLen: integer;
+  dataStart, dataLen: integer;
+  codeSeg, dataSeg: RSegment;
+  Name: string;
+  nameLen: integer;
+  src: TStrings;
+  res, i: integer;
+begin
+  Result := False;
+  lastError := 'Invalid BASIC program';
+  if (seg.size < (1 + 3 + 1 + 3 + 3)) or (seg.Data[0] <> BASIC_TAPEHEADER) then begin
+    exit;
+  end;
+  nameLen := seg.Data[1] * 256 + seg.Data[2];
+  if (seg.size < (1 + 3 + +1 + 3 + 3 + NameLen)) then begin
+    exit;
+  end;
+  SetLength(Name, nameLen);
+  for i := 1 to nameLen do begin
+    Name[i] := chr(seg.Data[1 + 3 + i - 1]);
+  end;
+  codeStart := 1 + 3 + nameLen + 1 + 3;
+  codeLen := seg.Data[codeStart - 3] * 256 + seg.Data[codeStart - 2];
+  if (seg.size < (1 + 3 + +1 + 3 + 3 + NameLen + codeLen)) then begin
+    exit;
+  end;
+  dataStart := 1 + 3 + nameLen + 1 + 3 + codeLen + 1 + 3;
+  dataLen := seg.Data[dataStart - 3] * 256 + seg.Data[dataStart - 2];
+  if (seg.size < (1 + 3 + 1 + 3 + 3 + NameLen + codeLen + dataLen)) then begin
+    exit;
+  end;
+  Segment_copyRange(seg, codeSeg, codeStart, codeLen);
+  Segment_copyRange(seg, dataSeg, dataStart, dataLen);
+  src := TStringList.Create;
+  src.Add(Format('; name="%s"', [Name]));
+  try
+    try
+      res := BASIC_decode(codeSeg, dataseg, src);
+    except
+      on E: Exception do begin
+        Result := False;
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
+      end;
+    end;
+    try
+      src.SaveToFile(outPath);
+    except
+      on E: Exception do begin
+        Result := False;
+        lastError := Format(EXCEPTION_FMT, [E.Message]);
+      end;
+    end;
+  finally
+    FreeAndNil(src);
+  end;
+  Result := (res = 0);
+  lastError := Format(BASICERR_FMT, [res]);
+end;
+
 
 end.

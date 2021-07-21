@@ -70,7 +70,7 @@ begin
     // Step 2 - Resize the image
     if (image1.Width <> DAI_SCREEN_WIDTH) or (image1.Height <> DAI_SCREEN_LINES) then begin
       canvas := TFPImageCanvas.Create(image2);
-      canvas.StretchDraw(0, 0, DAI_SCREEN_WIDTH - 1, DAI_SCREEN_LINES - 1, image1);
+      canvas.StretchDraw(0, 0, DAI_SCREEN_WIDTH, DAI_SCREEN_LINES, image1);
       srcI := image2;
       dstI := image1;
       change := True;

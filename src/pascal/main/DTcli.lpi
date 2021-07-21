@@ -24,7 +24,7 @@
             <Filename Value="$Env(BUILD_PATH)DAI-Tools\DTcli"/>
           </Target>
           <SearchPaths>
-            <IncludeFiles Value="$(ProjOutDir)"/>
+            <IncludeFiles Value="$(ProjOutDir);lib"/>
             <OtherUnitFiles Value="gui;lib"/>
             <UnitOutputDirectory Value="$Env(BUILD_PATH)DAI-Tools\lib\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
@@ -60,7 +60,7 @@
             <Filename Value="$Env(BUILD_PATH)DAI-Tools\DTcli"/>
           </Target>
           <SearchPaths>
-            <IncludeFiles Value="$(ProjOutDir)"/>
+            <IncludeFiles Value="$(ProjOutDir);lib"/>
             <OtherUnitFiles Value="gui;lib"/>
             <UnitOutputDirectory Value="$Env(BUILD_PATH)DAI-Tools\lib\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
@@ -92,7 +92,7 @@
         <PackageName Value="LCLBase"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="10">
+    <Units Count="12">
       <Unit0>
         <Filename Value="DTcli.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -133,6 +133,14 @@
         <Filename Value="lib\libGraphFrame.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit9>
+      <Unit10>
+        <Filename Value="lib\libBASIC.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit10>
+      <Unit11>
+        <Filename Value="lib\tokens.inc"/>
+        <IsPartOfProject Value="True"/>
+      </Unit11>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -142,7 +150,7 @@
       <Filename Value="$Env(BUILD_PATH)DAI-Tools\DTcli"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir)"/>
+      <IncludeFiles Value="$(ProjOutDir);lib"/>
       <OtherUnitFiles Value="gui;lib"/>
       <UnitOutputDirectory Value="$Env(BUILD_PATH)DAI-Tools\lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
