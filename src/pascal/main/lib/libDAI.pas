@@ -963,7 +963,7 @@ begin
   Segment_copyRange(seg, codeSeg, codeStart, codeLen);
   Segment_copyRange(seg, dataSeg, dataStart, dataLen);
   src := TStringList.Create;
-  src.Add(Format('; name="%s"', [Name]));
+  src.Add(Format(';tapename="%s"', [Name]));
   try
     try
       res := BASIC_decode(codeSeg, dataseg, src);

@@ -35,16 +35,7 @@ function BASIC_encode(const src: TStrings; out codeSeg, dataSeg: RSegment): inte
 
 implementation
 
-const
-  SEP_SPACE = ' ';
-  SEP_ARG = ',';
-  SEP_LIST = ';';
-  SEP_STMT = ':';
-  SEP_EQUAL = '=';
-
-  TYPE_FLOAT = '!';
-  TYPE_INTEGER = '%';
-  TYPE_STRING = '$';
+{$include basic_formats.inc}
 
 type
 
@@ -62,7 +53,10 @@ type
     offset: integer;
     typ: integer;
     Name: string;
+    Count: integer;
+    hasVal: boolean;
     val: VariableVal;
+    ref: integer;
   end;
 
   PLineRef = ^LineRef;
@@ -75,8 +69,10 @@ type
   PBasicContext = ^RBasicContext;
 
   RBasicContext = record
-    ps: integer;
+    codePos: integer;
+    codeLen: integer;
     code: array of byte;
+    dataLen: integer;
     Data: array of byte;
     Lines: array of LineRef;
     vars: array of VariableRef;
@@ -115,26 +111,53 @@ var
 function decodeStatement(var ctx: RBasicContext): string; forward;
 function decodeExpression(var ctx: RBasicContext): string; forward;
 
-function getByte(var ctx: RBasicContext): integer;
+function peekCode(var ctx: RBasicContext): integer; inline;
 begin
   with ctx do begin
-    Result := code[ps];
-    Inc(ps);
+    if (codePos < codeLen) then begin
+      Result := code[codePos];
+    end
+    else begin
+      Result := 0;
+    end;
   end;
 end;
 
-function peekByte(var ctx: RBasicContext): integer;
+function getByte(var ctx: RBasicContext): integer; inline;
 begin
   with ctx do begin
-    Result := code[ps];
+    Result := peekCode(ctx);
+    Inc(codePos);
   end;
 end;
 
 function getWord(var ctx: RBasicContext): integer;
 begin
   with ctx do begin
-    Result := code[ps] * 256 + code[ps + 1];
-    Inc(ps, 2);
+    if ((codePos + 1) < codeLen) then begin
+      Result := code[codePos] * 256 + code[codePos + 1];
+    end
+    else begin
+      Result := 0;
+    end;
+    Inc(codePos, 2);
+  end;
+end;
+
+function getVarVal(var ctx: RBasicContext): VariableVal;
+var
+  i: integer;
+begin
+  with ctx do begin
+    if ((codePos + 3) < codeLen) then begin
+      for i := 0 to 3 do begin
+        Result.b[3 - i] := code[codePos + i];
+      end;
+    end
+    else begin
+      Result.i := 0;
+    end;
+    Inc(codePos, 4);
   end;
 end;
 
@@ -143,14 +166,72 @@ var
   i, l: integer;
 begin
   Result := '';
-  with ctx do begin
-    l := getByte(ctx);
-    if l > 0 then begin
+  l := getByte(ctx);
+  if l > 0 then begin
+    with ctx do begin
       SetLength(Result, l);
       for i := 1 to l do begin
         Result[i] := chr(getByte(ctx));
       end;
     end;
+  end;
+end;
+
+procedure decodeSymbolTable(var ctx: RBasicContext);
+var
+  addr: integer;
+  numVars: integer;
+  t, len, i: integer;
+begin
+  with ctx do begin
+    addr := 0;
+    numVars := 0;
+    while True do begin
+      if (dataLen - addr) < 1 then begin
+        break;
+      end;
+      t := Data[addr];
+      Inc(addr);
+      len := t and $0F;
+      if (len = 0) then begin
+        break;
+      end;
+      if (dataLen - addr) < len then begin
+        break;
+      end;
+      Inc(numVars);
+      if (numVars > Length(vars)) then begin
+        SetLength(vars, numVars + 100);
+      end;
+      with vars[numVars - 1] do begin
+        Count := 0;
+        typ := t and $F0 shr 4;
+        SetLength(Name, len);
+        for i := 1 to len do begin
+          Name[i] := chr(Data[addr]);
+          Inc(addr);
+        end;
+        offset := addr;
+        len := Data[addr] and $0F;
+        Inc(addr);
+        if (dataLen - addr) < len then begin
+          break;
+        end;
+        if len = 4 then begin
+          hasVal := True;
+          for i := 0 to 3 do begin
+            val.b[i] := Data[addr];
+            Inc(addr);
+          end;
+        end
+        else begin
+          hasVal := False;
+          ref := Data[addr] * 256 + Data[addr + 1];
+          addr := addr + len;
+        end;
+      end;
+    end;
+    SetLength(vars, NumVars);
   end;
 end;
 
@@ -164,22 +245,11 @@ begin
       with vars[i] do begin
         if (offset = aOffset) then begin
           Result := @vars[i];
+          Inc(Count);
           break;
         end;
       end;
     end;
-  end;
-end;
-
-function getVarVal(var ctx: RBasicContext): VariableVal;
-var
-  i: integer;
-begin
-  with ctx do begin
-    for i := 0 to 3 do begin
-      Result.b[3 - i] := code[ps + i];
-    end;
-    Inc(ps, 4);
   end;
 end;
 
@@ -212,7 +282,56 @@ begin
       Result := Result + SEP_ARG;
     end;
     linNR := getWord(ctx);
-    Result := Result + IntToStr(linNR);
+    Result := Result + Format(FMT_LINENR, [linNR]);
+  end;
+end;
+
+function decodeType(typ: integer; impl: char): string;
+var
+  t: integer;
+begin
+  t := typ and $03;
+  if (impl >= 'A') and (impl <= 'Z') then begin
+    if t = IMP[impl] then begin
+      t := -1;
+    end;
+  end;
+  case (t) of
+    $0: begin
+      Result := TYPE_FLOAT;
+    end;
+    $1: begin
+      Result := TYPE_INTEGER;
+    end;
+    $2: begin
+      Result := TYPE_STRING;
+    end;
+    else begin
+      Result := '';
+    end;
+  end;
+end;
+
+function FormatFPT(cs: double): string;
+begin
+  Result := UpperCase(Format('%g', [cs]));
+  if (pos('.', Result) = 0) and (pos('E', Result) = 0) then begin
+    Result := Result + '.0';
+  end;
+end;
+
+function decodeValue(cType: longint; val: VariableVal): string;
+begin
+  case cTYpe of
+    $0: begin
+      Result := FormatFPT(decodeDouble(val));
+    end;
+    $1: begin
+      Result := Format(FMT_INTEGER, [val.i]);
+    end;
+    else begin
+      Result := '';
+    end;
   end;
 end;
 
@@ -220,31 +339,31 @@ function decodeConstant(var ctx: RBasicContext): string;
 var
   cType: integer;
   ci: integer;
-  cs: double;
+  cf: double;
+  cs: string;
 begin
   with ctx do begin
     cType := getByte(ctx);
     case cTYpe of
       $10: begin
-        cs := decodeDouble(getVarVal(ctx));
-        Result := UpperCase(Format('%g', [cs]));
-        if (pos('.', Result) = 0) and (pos('E', Result) = 0) then begin
-          Result := Result + '.0';
-        end;
+        cf := decodeDouble(getVarVal(ctx));
+        Result := FormatFPT(cf);
       end;
       $14: begin
         ci := getVarVal(ctx).i;
-        Result := Format('%d', [ci]);
+        Result := Format(FMT_INTEGER, [ci]);
       end;
       $15: begin
         ci := getVarVal(ctx).i;
-        Result := Format('#%x', [ci]);
+        Result := Format(FMT_HEX, [ci]);
       end;
       $18: begin // Quoted String
-        Result := Format('"%s"', [getPString(ctx)]);
+        cs := getPString(ctx);
+        Result := Format(FMT_QSTRING, [cs]);
       end;
       $19: begin // Unquoted String
-        Result := getPString(ctx);
+        cs := getPString(ctx);
+        Result := Format(FMT_STRING, [cs]);
       end;
       else begin
         Result := '';
@@ -257,41 +376,21 @@ function decodeVarRef(var ctx: RBasicContext; withArg: boolean): string;
 var
   offset: integer;
   VR: PVariableRef;
-  numArg, i, t: integer;
-  ch: char;
+  numArg, i: integer;
+  typeC: string;
 begin
   offset := getWord(ctx) and $3FFF;
   VR := findSymbol(ctx, offset);
   if (VR <> nil) then begin
-    Result := VR^.Name;
-    t := VR^.typ and $03;
-    ch := Result[1];
-    if (ch >= 'A') and (ch <= 'Z') then begin
-      if t = IMP[ch] then begin
-        t := -1;
-      end;
-    end;
-    case (t) of
-      $0: begin
-        Result := Result + TYPE_FLOAT;
-      end;
-      $1: begin
-        Result := Result + TYPE_INTEGER;
-      end;
-      $2: begin
-        Result := Result + TYPE_STRING;
-      end;
-      else begin
-        //
-      end;
-    end;
+    typeC := decodeType(VR^.typ, VR^.Name[1]);
+    Result := VR^.Name + typeC;
     if (withArg) and ((VR^.typ and $4) <> 0) then begin
       Result := Result + '(';
       numArg := getByte(ctx);
       for i := 1 to numArg do begin
         getByte(ctx);
         if (i > 1) then begin
-          Result := Result + ',';
+          Result := Result + SEP_ARG;
         end;
         Result := Result + decodeExpression(ctx);
       end;
@@ -325,10 +424,10 @@ begin
         else begin
           if Name <> '' then begin
             if CharInSet(Name[1], ['A'..'Z']) then begin
-              tmp := ' ' + Name + ' ';
+              tmp := Format(FMT_OPERALT, [Name]);
             end
             else begin
-              tmp := Name;
+              tmp := Format(FMT_OPER, [Name]);
             end;
           end
           else begin
@@ -341,7 +440,7 @@ begin
       end;
     end
     else if opcode >= $40 then begin // Variable reference
-      Dec(ps);
+      Dec(codePos);
       Result := decodeVarRef(ctx, True);
     end
     else if opcode >= $20 then begin // Function call
@@ -363,7 +462,7 @@ begin
       end;
     end
     else begin // Constants
-      Dec(ps);
+      Dec(codePos);
       Result := decodeConstant(ctx);
     end;
   end;
@@ -377,7 +476,7 @@ begin
   with ctx do begin
     lnr := getWord(ctx);
     if (lnr <> 0) then begin
-      Result := IntToStr(lnr);
+      Result := Format(FMT_LINENR, [lnr]);
     end
     else begin
       Result := '';
@@ -388,11 +487,11 @@ end;
 function TokenDecoder02(var ctx: RBasicContext): string;
   // (02) linenr linenr (not used)
 var
-  ln1, ln2: integer;
+  lin1, lin2: integer;
 begin
-  ln1 := getWord(ctx);
-  ln2 := getWord(ctx);
-  Result := IntToStr(ln1) + SEP_SPACE + IntToStr(ln2);
+  lin1 := getWord(ctx);
+  lin2 := getWord(ctx);
+  Result := Format(FMT_LINENR_RANGE, [lin1, lin2]);
 end;
 
 function TokenDecoder03(var ctx: RBasicContext): string;
@@ -444,12 +543,12 @@ var
 begin
   Result := decodeExpression(ctx) + SEP_ARG + decodeExpression(ctx);
   repeat
-    eol := peekByte(ctx);
+    eol := peekCode(ctx);
     if eol <> $FF then begin
       Result := Result + SEP_ARG + decodeExpression(ctx);
     end
     else begin
-      Inc(ctx.ps);
+      Inc(ctx.codePos);
     end;
   until eol = $FF;
 end;
@@ -461,7 +560,7 @@ var
 begin
   lin1 := getWord(ctx);
   lin2 := getWord(ctx);
-  Result := IntToStr(lin1) + ' - ' + IntToStr(lin2);
+  Result := Format(FMT_LINENR_RANGEALT, [lin1, lin2]);
 end;
 
 function TokenDecoder0C(var ctx: RBasicContext): string;
@@ -469,17 +568,17 @@ function TokenDecoder0C(var ctx: RBasicContext): string;
 var
   eol: integer;
 begin
-  eol := peekByte(ctx);
+  eol := peekCode(ctx);
   if (eol = $FF) then begin
     Result := 'OFF';
-    Inc(ctx.ps);
+    Inc(ctx.codePos);
   end
   else begin
     Result := decodeExpression(ctx) + SEP_SPACE;
-    eol := peekByte(ctx);
+    eol := peekCode(ctx);
     if (eol = $FF) then begin
       Result := Result + 'OFF';
-      Inc(ctx.ps);
+      Inc(ctx.codePos);
     end
     else begin
       Result := Result + TokenDecoder09(ctx);
@@ -492,10 +591,10 @@ function TokenDecoder0D(var ctx: RBasicContext): string;
 var
   eol: integer;
 begin
-  eol := peekByte(ctx);
+  eol := peekCode(ctx);
   if (eol = $FF) then begin
     Result := 'OFF';
-    Inc(ctx.ps);
+    Inc(ctx.codePos);
   end
   else begin
     Result := TokenDecoder06(ctx);
@@ -512,9 +611,9 @@ begin
   for i := 1 to n do begin
     Result := Result + TokenDecoder05(ctx) + SEP_LIST;
   end;
-  eol := peekByte(ctx);
+  eol := peekCode(ctx);
   if (eol = $FF) then begin
-    Inc(ctx.ps);
+    Inc(ctx.codePos);
   end
   else begin
     Result := Result + decodeExpression(ctx);
@@ -565,7 +664,9 @@ end;
 function TokenDecoder12(var ctx: RBasicContext): string;
   // (12) (not used [*])
 begin
-  Result := '';
+  with ctx do begin
+    Result := '';
+  end;
 end;
 
 function TokenDecoder13(var ctx: RBasicContext): string;
@@ -589,7 +690,7 @@ var
 begin
   Result := decodeExpression(ctx) + ' GOTO ';
   linNR := getWord(ctx);
-  Result := Result + IntToStr(linNR);
+  Result := Result + Format(FMT_LINENR, [linNR]);
 end;
 
 function TokenDecoder16(var ctx: RBasicContext): string;
@@ -599,7 +700,7 @@ var
 begin
   Result := decodeExpression(ctx) + ' THEN ';
   linNR := getWord(ctx);
-  Result := Result + IntToStr(linNR);
+  Result := Result + Format(FMT_LINENR, [linNR]);
 end;
 
 function TokenDecoder17(var ctx: RBasicContext): string;
@@ -608,9 +709,9 @@ var
   eol: integer;
 begin
   Result := TokenDecoder13(ctx) + ' TO ' + decodeExpression(ctx);
-  eol := peekByte(ctx);
+  eol := peekCode(ctx);
   if (eol = $FF) then begin
-    Inc(ctx.ps);
+    Inc(ctx.codePos);
   end
   else begin
     Result := Result + ' STEP ' + decodeExpression(ctx);
@@ -659,12 +760,12 @@ var
 begin
   Result := decodeExpression(ctx);
   repeat
-    eol := peekByte(ctx);
+    eol := peekCode(ctx);
     if eol <> $FF then begin
       Result := Result + SEP_ARG + decodeExpression(ctx);
     end
     else begin
-      Inc(ctx.ps);
+      Inc(ctx.codePos);
     end;
   until eol = $FF;
 end;
@@ -672,7 +773,9 @@ end;
 function TokenDecoder1D(var ctx: RBasicContext): string;
   // (1D) (not used [*])
 begin
-  Result := '';
+  with ctx do begin
+    Result := '';
+  end;
 end;
 
 function TokenDecoder1E(var ctx: RBasicContext): string;
@@ -701,126 +804,77 @@ begin
   end;
 end;
 
-procedure decodeSymbolTable(var ctx: RBasicContext);
-var
-  addr: integer;
-  numVars: integer;
-  t, len, i: integer;
-  dataLen: integer;
-begin
-  with ctx do begin
-    dataLen := Length(Data);
-    addr := 0;
-    numVars := 0;
-    while True do begin
-      if (dataLen - addr) < 1 then begin
-        break;
-      end;
-      t := Data[addr];
-      Inc(addr);
-      len := t and $0F;
-      if (len = 0) then begin
-        break;
-      end;
-      if (dataLen - addr) < len then begin
-        break;
-      end;
-      Inc(numVars);
-      if (numVars > Length(vars)) then begin
-        SetLength(vars, numVars + 100);
-      end;
-      with vars[numVars - 1] do begin
-        typ := t and $F0 shr 4;
-        SetLength(Name, len);
-        for i := 1 to len do begin
-          Name[i] := chr(Data[addr]);
-          Inc(addr);
-        end;
-        offset := addr;
-        len := Data[addr] and $0F;
-        Inc(addr);
-        if (dataLen - addr) < len then begin
-          break;
-        end;
-        if len = 4 then begin
-          for i := 0 to 3 do begin
-            val.b[i] := Data[addr];
-            Inc(addr);
-          end;
-        end
-        else begin
-          addr := addr + len;
-        end;
-      end;
-    end;
-    SetLength(vars, NumVars);
-  end;
-end;
-
 function BASIC_decode(const codeSeg, dataSeg: RSegment; var src: TStrings): integer;
 var
   ctx: RBasicContext;
-  len: integer;
   lineLen, lineNr: integer;
   lineNRStr, outLine: string;
   nxtCmd, curLine: integer;
-  numLin: integer;
-  token: string;
+  numLin, i: integer;
+  token, s: string;
 begin
-  len := codeSeg.size;
-  if (len < 1) then begin
-    Result := R_INVALIDPROG;
-    exit;
-  end;
-  with  ctx do begin
-    ps := 0;
+  with ctx do begin
+    codeLen := codeSeg.size;
+    dataLen := dataSeg.size;
+    if (codeLen < 1) or (dataLen < 1) then begin
+      Result := R_INVALIDPROG;
+      exit;
+    end;
+    codePos := 0;
     code := codeSeg.Data;
     Data := dataSeg.Data;
     SetLength(Lines, 0);
     SetLength(vars, 0);
+    decodeSymbolTable(ctx);
   end;
-  decodeSymbolTable(ctx);
   numLin := 0;
-  try
-    with ctx do begin
-      while (ps < (len - 1)) do begin
-        lineLen := getByte(ctx);
-        if (lineLen = 0) then begin
-          break;
-        end;
-        curLine := ps - 1;
-        Inc(numLin);
-        outLine := '';
-        if ((len - ps) < lineLen + 1) then begin
-          Result := R_INVALIDLINE;
+  with ctx do begin
+    while (codePos < (codeLen - 1)) do begin
+      lineLen := getByte(ctx);
+      if (lineLen = 0) then begin
+        break;
+      end;
+      curLine := codePos - 1;
+      Inc(numLin);
+      outLine := '';
+      if ((codeLen - codePos) < lineLen + 1) then begin
+        Result := R_INVALIDLINE;
+        exit;
+      end;
+      lineNr := getWord(ctx);
+      lineNRStr := Format(FMT_LINENR_START, [lineNr]);
+      if (numLin > Length(Lines)) then begin
+        SetLength(Lines, numLin + 1000);
+      end;
+      Lines[numLin - 1].lineNR := lineNR;
+      Lines[numLin - 1].addr := curLine;
+      outLine := lineNRStr;
+      repeat
+        token := decodeStatement(ctx);
+        if token = '?' then begin
+          Result := R_INVALIDPROG;
           exit;
         end;
-        lineNr := getWord(ctx);
-        lineNRStr := Format('%-7d', [lineNr]);
-        if (numLin > Length(Lines)) then begin
-          SetLength(Lines, numLin + 1000);
+        outline := outline + token;
+        nxtCmd := peekCode(ctx);
+        if (nxtCmd > $80) then begin
+          outLine := outline + SEP_STMT;
         end;
-        Lines[numLin - 1].lineNR := lineNR;
-        Lines[numLin - 1].addr := curLine;
-        outLine := lineNRStr;
-        repeat
-          token := decodeStatement(ctx);
-          if token = '?' then begin
-            Result := R_INVALIDPROG;
-            exit;
-          end;
-          outline := outline + token;
-          nxtCmd := code[ps];
-          if (nxtCmd > $80) then begin
-            outLine := outline + SEP_STMT;
-          end;
-        until (nxtCmd <= $80);
-        src.add(outLine);
-      end;
-      SetLength(Lines, numLin);
-
+      until (nxtCmd <= $80);
+      src.add(outLine);
     end;
-  finally
+    SetLength(Lines, numLin);
+  end;
+  with ctx do begin
+    if Length(vars) > 0 then begin
+      src.add(';DATA SECTION');
+      for i := low(vars) to High(vars) do begin
+        with vars[i] do begin
+          s := Format('%.4x@%s%s %d reference(s)', [offset, Name, decodeType(typ, #0), Count]);
+          src.add('; ' + s);
+        end;
+      end;
+    end;
   end;
   Result := R_OK;
 end;
@@ -836,7 +890,7 @@ var
   ch: char;
 
 initialization
-  {$include tokens.inc}
+  {$include basic_tokens.inc}
   for ch := 'A' to 'Z' do begin
     IMP[ch] := 0;
   end;
