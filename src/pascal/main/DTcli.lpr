@@ -157,6 +157,7 @@ const
             end
             else begin
               Writeln('KO!');
+              ok := True; // Avoid help
             end;
             break;
           end;
@@ -533,7 +534,7 @@ var
   Application: TDAIToolCLI;
 begin
   Application := TDAIToolCLI.Create(nil);
-  Application.Title:='DAI tools CLI';
+  Application.Title := 'DAI tools CLI';
   Application.Run;
   Application.Free;
 end.

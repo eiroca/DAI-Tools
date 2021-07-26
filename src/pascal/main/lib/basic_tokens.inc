@@ -102,8 +102,8 @@
  with FUNCS[$26] do begin Name:= 'ACOS'; retType:= $0; args:= [$0]; end;
  with FUNCS[$27] do begin Name:= 'ATN'; retType:= $0; args:= [$0]; end;
 
-with OPERS[$00] do begin Name:= '+'; Code:= $00; Pri:= 5; Uni:= True; end;
-with OPERS[$01] do begin Name:= '-'; Code:= $01; Pri:= 5; Uni:= True; end;
+with OPERS[$00] do begin Name:= '+'; Code:= $00; Pri:= 5; Uni:= False; end;
+with OPERS[$01] do begin Name:= '-'; Code:= $01; Pri:= 5; Uni:= False; end;
 with OPERS[$02] do begin Name:= '/'; Code:= $02; Pri:= 6; Uni:= False; end;
 with OPERS[$03] do begin Name:= '*'; Code:= $03; Pri:= 6; Uni:= False; end;
 with OPERS[$04] do begin Name:= '^'; Code:= $04; Pri:= 7; Uni:= False; end;

@@ -35,8 +35,7 @@ function DAI_loadWAV(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadPNG(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadPNGOpt(const inPath: string; var seg: RSegment): boolean;
 function DAI_loadHRFB(const inPath: string; var seg: RSegment): boolean;
-
-function DAI_loadPNG(const image: TFPCustomImage; optimize: boolean; var seg: RSegment): boolean;
+function DAI_loadBAS(const inPath: string; var seg: RSegment): boolean;
 
 function DAI_saveBin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveSBin(const outPath: string; var seg: RSegment): boolean;
@@ -48,8 +47,9 @@ function DAI_saveDAIbin(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveDAIbas(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveWAV(const outPath: string; var seg: RSegment): boolean;
 function DAI_saveHRFB(const outPath: string; var seg: RSegment): boolean;
-
 function DAI_saveBAS(const outPath: string; var seg: RSegment): boolean;
+
+function DAI_loadPNG(const image: TFPCustomImage; optimize: boolean; var seg: RSegment): boolean;
 
 implementation
 
@@ -927,6 +927,27 @@ begin
   end;
 end;
 
+function DAI_loadBAS(const inPath: string; var seg: RSegment): boolean;
+var
+  Lines: TStringList;
+  codeSeg, dataSeg: RSegment;
+  Name: string;
+begin
+  Result := False;
+  Lines := TStringList.Create;
+  Name := ExtractFileName(inPath);
+  if length(Name) > 255 then begin
+    SetLength(Name, 255);
+  end;
+  try
+    Lines.LoadFromFile(inPath);
+    Result := BASIC_encode(Lines, codeSeg, dataSeg) = R_OK;
+    seg := codeSeg;
+  finally
+    Lines.Free;
+  end;
+end;
+
 function DAI_saveBAS(const outPath: string; var seg: RSegment): boolean;
 var
   codeStart, codeLen: integer;
@@ -988,5 +1009,5 @@ begin
   lastError := Format(BASICERR_FMT, [res]);
 end;
 
-
 end.
+
